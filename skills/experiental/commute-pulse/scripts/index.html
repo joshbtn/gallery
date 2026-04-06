@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commute Pulse</title>
+</head>
+<body>
+  <script>
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function toFinite(value, fallback) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const toRad = (d) => d * Math.PI / 180;
+      const r = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return r * c;
+    }
+
+    function round2(n) {
+      return Math.round(n * 100) / 100;
+    }
+
+    function normalizeInput(parsed) {
+      const latitude = toFinite(parsed.latitude, NaN);
+      const longitude = toFinite(parsed.longitude, NaN);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        throw new Error("latitude and longitude are required numbers");
+      }
+
+      const modeRaw = String(parsed.mode || "transit").toLowerCase();
+      const mode = ["transit", "walk", "bike", "drive"].includes(modeRaw) ? modeRaw : "transit";
+      const departWithin = clamp(toFinite(parsed.depart_within_minutes, 90), 30, 240);
+
+      let destination = null;
+      if (parsed.destination && typeof parsed.destination === "object") {
+        const dLat = toFinite(parsed.destination.latitude, NaN);
+        const dLon = toFinite(parsed.destination.longitude, NaN);
+        if (Number.isFinite(dLat) && Number.isFinite(dLon)) {
+          destination = {
+            latitude: dLat,
+            longitude: dLon,
+            label: parsed.destination.label ? String(parsed.destination.label) : "destination"
+          };
+        }
+      }
+
+      return {
+        latitude,
+        longitude,
+        mode,
+        departWithin,
+        destination
+      };
+    }
+
+    async function fetchWeather(lat, lon) {
+      const now = new Date();
+      const end = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+      const url =
+        "https://api.open-meteo.com/v1/forecast?latitude=" + encodeURIComponent(lat) +
+        "&longitude=" + encodeURIComponent(lon) +
+        "&hourly=temperature_2m,precipitation_probability,windspeed_10m,weathercode" +
+        "&timezone=auto&start_date=" + now.toISOString().slice(0, 10) +
+        "&end_date=" + end.toISOString().slice(0, 10);
+
+      const response = await fetch(url, { method: "GET" });
+      if (!response.ok) {
+        throw new Error("Weather fetch failed with status " + response.status);
+      }
+      const data = await response.json();
+      return data.hourly || {};
+    }
+
+    async function fetchNearbyStops(lat, lon) {
+      const query = "[out:json][timeout:20];(node(around:800," + lat + "," + lon + ")[\"public_transport\"=\"platform\"];node(around:800," + lat + "," + lon + ")[\"highway\"=\"bus_stop\"];node(around:800," + lat + "," + lon + ")[\"railway\"=\"station\"];);out body 40;";
+      const response = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: query
+      });
+
+      if (!response.ok) {
+        throw new Error("Transit stop fetch failed with status " + response.status);
+      }
+
+      const data = await response.json();
+      return Array.isArray(data.elements) ? data.elements : [];
+    }
+
+    function getHourlySnapshot(hourly, targetTime) {
+      const times = Array.isArray(hourly.time) ? hourly.time : [];
+      const precip = Array.isArray(hourly.precipitation_probability) ? hourly.precipitation_probability : [];
+      const temp = Array.isArray(hourly.temperature_2m) ? hourly.temperature_2m : [];
+      const wind = Array.isArray(hourly.windspeed_10m) ? hourly.windspeed_10m : [];
+      const weatherCode = Array.isArray(hourly.weathercode) ? hourly.weathercode : [];
+
+      if (times.length === 0) {
+        return { precipitation_probability: 20, temperature_c: 20, wind_kmh: 10, weather_code: -1 };
+      }
+
+      const targetHourIso = new Date(targetTime.getTime());
+      targetHourIso.setMinutes(0, 0, 0);
+      const target = targetHourIso.toISOString().slice(0, 13);
+      let idx = times.findIndex((t) => String(t).slice(0, 13) === target);
+      if (idx < 0) idx = 0;
+
+      return {
+        precipitation_probability: Number.isFinite(precip[idx]) ? precip[idx] : 20,
+        temperature_c: Number.isFinite(temp[idx]) ? temp[idx] : 20,
+        wind_kmh: Number.isFinite(wind[idx]) ? wind[idx] : 10,
+        weather_code: Number.isFinite(weatherCode[idx]) ? weatherCode[idx] : -1
+      };
+    }
+
+    function weatherPenalty(snapshot) {
+      let score = 0;
+      score += clamp(snapshot.precipitation_probability, 0, 100) * 0.5;
+      if (snapshot.wind_kmh > 20) {
+        score += (snapshot.wind_kmh - 20) * 1.5;
+      }
+      if (snapshot.temperature_c < 2) {
+        score += (2 - snapshot.temperature_c) * 3;
+      }
+      if (snapshot.temperature_c > 32) {
+        score += (snapshot.temperature_c - 32) * 3;
+      }
+      return clamp(score, 0, 100);
+    }
+
+    function estimateTravelMinutes(mode, distanceKm, currentHour) {
+      const speedByMode = {
+        walk: 5,
+        bike: 16,
+        drive: 32,
+        transit: 22
+      };
+      const baseSpeed = speedByMode[mode] || 22;
+      const rush = (currentHour >= 7 && currentHour <= 9) || (currentHour >= 16 && currentHour <= 19);
+      const adjustedSpeed = rush && (mode === "drive" || mode === "transit") ? baseSpeed * 0.75 : baseSpeed;
+      const minutes = (distanceKm / adjustedSpeed) * 60;
+      const transferBuffer = mode === "transit" ? 8 : 0;
+      return Math.max(3, Math.round(minutes + transferBuffer));
+    }
+
+    function buildDepartureWindows(input, weather, stopsCount) {
+      const windows = [];
+      const now = new Date();
+      const step = 15;
+      const slots = Math.floor(input.departWithin / step);
+
+      for (let i = 0; i <= slots; i++) {
+        const when = new Date(now.getTime() + i * step * 60 * 1000);
+        const snapshot = getHourlySnapshot(weather, when);
+        const penalty = weatherPenalty(snapshot);
+
+        const transitBoost = input.mode === "transit"
+          ? clamp(stopsCount * 1.5, 0, 20)
+          : 8;
+
+        const score = clamp(100 - penalty + transitBoost, 0, 100);
+
+        windows.push({
+          departure_local: when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          score: round2(score),
+          weather: snapshot
+        });
+      }
+
+      return windows.sort((a, b) => b.score - a.score).slice(0, 3);
+    }
+
+    window["ai_edge_gallery_get_result"] = async (data) => {
+      try {
+        const parsed = data ? JSON.parse(data) : {};
+        const input = normalizeInput(parsed);
+
+        const warnings = [];
+        let weather = null;
+        let stops = [];
+
+        try {
+          weather = await fetchWeather(input.latitude, input.longitude);
+        } catch (e) {
+          warnings.push("Weather data unavailable: " + e.message);
+          weather = {};
+        }
+
+        try {
+          stops = await fetchNearbyStops(input.latitude, input.longitude);
+        } catch (e) {
+          warnings.push("Nearby transit data unavailable: " + e.message);
+        }
+
+        const topWindows = buildDepartureWindows(input, weather, stops.length);
+
+        let travelEstimate = null;
+        if (input.destination) {
+          const distanceKm = haversineKm(
+            input.latitude,
+            input.longitude,
+            input.destination.latitude,
+            input.destination.longitude
+          );
+          const nowHour = new Date().getHours();
+          const mins = estimateTravelMinutes(input.mode, distanceKm, nowHour);
+          travelEstimate = {
+            destination_label: input.destination.label,
+            distance_km: round2(distanceKm),
+            estimated_minutes: mins,
+            estimated_range_minutes: [Math.max(3, mins - 5), mins + 8]
+          };
+        }
+
+        return JSON.stringify({
+          result: {
+            input: input,
+            nearby_transit_stops_count: stops.length,
+            top_departure_windows: topWindows,
+            travel_estimate: travelEstimate,
+            warnings: warnings,
+            data_sources: [
+              "Open-Meteo forecast API",
+              "OpenStreetMap Overpass API"
+            ]
+          }
+        });
+      } catch (error) {
+        return JSON.stringify({
+          error: "Commute Pulse failed: " + error.message
+        });
+      }
+    };
+  </script>
+</body>
+</html>

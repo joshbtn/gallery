@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Greeks Calculator</title>
+</head>
+<body>
+  <script>
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function toFiniteNumber(value, fallback) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function normCdf(x) {
+      const a1 = 0.319381530;
+      const a2 = -0.356563782;
+      const a3 = 1.781477937;
+      const a4 = -1.821255978;
+      const a5 = 1.330274429;
+      const p = 0.2316419;
+      const c2 = 0.3989422804014327;
+
+      if (x >= 0) {
+        const t = 1 / (1 + p * x);
+        return 1 - c2 * Math.exp((-x * x) / 2) * t *
+          (t * (t * (t * (t * a5 + a4) + a3) + a2) + a1);
+      }
+
+      return 1 - normCdf(-x);
+    }
+
+    function normPdf(x) {
+      return Math.exp((-x * x) / 2) / Math.sqrt(2 * Math.PI);
+    }
+
+    function computeBlackScholes(optionType, s, k, sigma, r, q, tYears) {
+      if (s <= 0 || k <= 0 || sigma <= 0 || tYears <= 0) {
+        throw new Error("Invalid pricing inputs. spot, strike, volatility, and time must be > 0.");
+      }
+
+      const sqrtT = Math.sqrt(tYears);
+      const d1 = (Math.log(s / k) + (r - q + 0.5 * sigma * sigma) * tYears) / (sigma * sqrtT);
+      const d2 = d1 - sigma * sqrtT;
+
+      const Nd1 = normCdf(d1);
+      const Nd2 = normCdf(d2);
+      const Nnd1 = normCdf(-d1);
+      const Nnd2 = normCdf(-d2);
+      const pdfD1 = normPdf(d1);
+
+      const discountR = Math.exp(-r * tYears);
+      const discountQ = Math.exp(-q * tYears);
+
+      let price;
+      let delta;
+      let theta;
+      let rho;
+
+      if (optionType === "call") {
+        price = s * discountQ * Nd1 - k * discountR * Nd2;
+        delta = discountQ * Nd1;
+        theta =
+          (-s * discountQ * pdfD1 * sigma) / (2 * sqrtT) -
+          r * k * discountR * Nd2 +
+          q * s * discountQ * Nd1;
+        rho = k * tYears * discountR * Nd2;
+      } else {
+        price = k * discountR * Nnd2 - s * discountQ * Nnd1;
+        delta = discountQ * (Nd1 - 1);
+        theta =
+          (-s * discountQ * pdfD1 * sigma) / (2 * sqrtT) +
+          r * k * discountR * Nnd2 -
+          q * s * discountQ * Nnd1;
+        rho = -k * tYears * discountR * Nnd2;
+      }
+
+      const gamma = (discountQ * pdfD1) / (s * sigma * sqrtT);
+      const vega = s * discountQ * pdfD1 * sqrtT;
+
+      return {
+        d1: d1,
+        d2: d2,
+        theoretical_price: price,
+        greeks: {
+          delta: delta,
+          gamma: gamma,
+          theta_per_day: theta / 365,
+          vega_per_1pct_iv: vega / 100,
+          rho_per_1pct_rate: rho / 100
+        }
+      };
+    }
+
+    function normalizeInput(parsed) {
+      const optionType = String(parsed.option_type || "call").toLowerCase() === "put" ? "put" : "call";
+      const spot = toFiniteNumber(parsed.spot, 100);
+      const strike = toFiniteNumber(parsed.strike, 100);
+      const volatility = clamp(toFiniteNumber(parsed.volatility, 0.25), 0.0001, 5);
+      const rate = clamp(toFiniteNumber(parsed.rate, 0.04), -0.5, 1);
+      const dividendYield = clamp(toFiniteNumber(parsed.dividend_yield, 0), -0.5, 1);
+      const days = clamp(toFiniteNumber(parsed.time_to_expiry_days, 30), 0.1, 3650);
+      const scenarios = Array.isArray(parsed.scenarios) ? parsed.scenarios.slice(0, 10) : [];
+
+      return {
+        optionType,
+        spot,
+        strike,
+        volatility,
+        rate,
+        dividendYield,
+        days,
+        scenarios
+      };
+    }
+
+    function runScenarios(base, baseline) {
+      const results = [];
+
+      for (const [index, scenario] of base.scenarios.entries()) {
+        const spotPct = toFiniteNumber(scenario.spot_pct, 0);
+        const volPct = toFiniteNumber(scenario.vol_pct, 0);
+        const daysForward = clamp(toFiniteNumber(scenario.days_forward, 0), 0, base.days - 0.1);
+
+        const nextSpot = base.spot * (1 + spotPct / 100);
+        const nextVol = clamp(base.volatility + volPct / 100, 0.0001, 5);
+        const nextDays = clamp(base.days - daysForward, 0.1, 3650);
+
+        const reprice = computeBlackScholes(
+          base.optionType,
+          nextSpot,
+          base.strike,
+          nextVol,
+          base.rate,
+          base.dividendYield,
+          nextDays / 365
+        );
+
+        results.push({
+          scenario_index: index + 1,
+          input: {
+            spot_pct: spotPct,
+            vol_pct: volPct,
+            days_forward: daysForward
+          },
+          repriced_value: reprice.theoretical_price,
+          value_change: reprice.theoretical_price - baseline.theoretical_price,
+          repriced_delta: reprice.greeks.delta,
+          repriced_theta_per_day: reprice.greeks.theta_per_day
+        });
+      }
+
+      return results;
+    }
+
+    window["ai_edge_gallery_get_result"] = async (data) => {
+      try {
+        const parsed = data ? JSON.parse(data) : {};
+        const base = normalizeInput(parsed);
+
+        const baseline = computeBlackScholes(
+          base.optionType,
+          base.spot,
+          base.strike,
+          base.volatility,
+          base.rate,
+          base.dividendYield,
+          base.days / 365
+        );
+
+        const scenarioResults = runScenarios(base, baseline);
+
+        return JSON.stringify({
+          result: {
+            model: "black_scholes_merton",
+            assumptions: {
+              option_type: base.optionType,
+              spot: base.spot,
+              strike: base.strike,
+              volatility: base.volatility,
+              rate: base.rate,
+              dividend_yield: base.dividendYield,
+              time_to_expiry_days: base.days
+            },
+            baseline: baseline,
+            scenarios: scenarioResults,
+            note: "Educational output only. This is not financial advice."
+          }
+        });
+      } catch (error) {
+        return JSON.stringify({
+          error: "Greeks calculation failed: " + error.message
+        });
+      }
+    };
+  </script>
+</body>
+</html>
