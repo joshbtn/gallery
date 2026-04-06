@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sensor Reader</title>
+</head>
+<body>
+  <script>
+    const DEFAULT_TIMEOUT_MS = 3500;
+    const SUPPORTED_KEYS = ["accelerometer", "gyroscope", "orientation", "geolocation"];
+
+    function clampTimeout(value) {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        return DEFAULT_TIMEOUT_MS;
+      }
+      return Math.min(Math.max(Math.floor(value), 500), 15000);
+    }
+
+    function normalizeRequestedSensors(value) {
+      if (!Array.isArray(value) || value.length === 0) {
+        return ["accelerometer", "gyroscope", "orientation"];
+      }
+
+      const lowered = value
+        .filter((v) => typeof v === "string")
+        .map((v) => v.toLowerCase().trim())
+        .filter((v, i, arr) => arr.indexOf(v) === i);
+
+      const valid = lowered.filter((v) => SUPPORTED_KEYS.includes(v));
+      return valid.length > 0 ? valid : ["accelerometer", "gyroscope", "orientation"];
+    }
+
+    function classifyEnvironment() {
+      const ua = navigator.userAgent || "";
+      const lowerUa = ua.toLowerCase();
+      const isMobileGuess = /(android|iphone|ipad|ipod|mobile)/.test(lowerUa);
+
+      return {
+        user_agent: ua,
+        is_mobile_guess: isMobileGuess,
+      };
+    }
+
+    function nowIso() {
+      return new Date().toISOString();
+    }
+
+    async function tryRequestIOSPermission(kind) {
+      try {
+        if (kind === "motion" && typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+          const state = await DeviceMotionEvent.requestPermission();
+          return state === "granted";
+        }
+        if (kind === "orientation" && typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const state = await DeviceOrientationEvent.requestPermission();
+          return state === "granted";
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function listenOnceWithTimeout(eventName, timeoutMs) {
+      return new Promise((resolve) => {
+        let resolved = false;
+
+        const done = (payload) => {
+          if (resolved) return;
+          resolved = true;
+          window.removeEventListener(eventName, onEvent);
+          resolve(payload);
+        };
+
+        const onEvent = (event) => done({ ok: true, event: event });
+        window.addEventListener(eventName, onEvent, { once: true });
+
+        setTimeout(() => done({ ok: false, reason: "timeout" }), timeoutMs);
+      });
+    }
+
+    async function collectMotionData(requested, timeoutMs, warnings) {
+      const result = {};
+
+      const needsMotion = requested.includes("accelerometer") || requested.includes("gyroscope");
+      if (!needsMotion) {
+        return result;
+      }
+
+      if (typeof window.DeviceMotionEvent === "undefined") {
+        if (requested.includes("accelerometer")) {
+          warnings.push("accelerometer unsupported: DeviceMotionEvent unavailable");
+        }
+        if (requested.includes("gyroscope")) {
+          warnings.push("gyroscope unsupported: DeviceMotionEvent unavailable");
+        }
+        return result;
+      }
+
+      const motionPermissionOk = await tryRequestIOSPermission("motion");
+      if (!motionPermissionOk) {
+        if (requested.includes("accelerometer")) {
+          warnings.push("accelerometer blocked: motion permission not granted");
+        }
+        if (requested.includes("gyroscope")) {
+          warnings.push("gyroscope blocked: motion permission not granted");
+        }
+        return result;
+      }
+
+      const motion = await listenOnceWithTimeout("devicemotion", timeoutMs);
+      if (!motion.ok || !motion.event) {
+        if (requested.includes("accelerometer")) {
+          warnings.push("accelerometer unavailable: no motion event captured before timeout");
+        }
+        if (requested.includes("gyroscope")) {
+          warnings.push("gyroscope unavailable: no motion event captured before timeout");
+        }
+        return result;
+      }
+
+      const event = motion.event;
+
+      if (requested.includes("accelerometer")) {
+        const acc = event.acceleration || null;
+        const accWithGravity = event.accelerationIncludingGravity || null;
+        result.accelerometer = {
+          x: acc ? acc.x : null,
+          y: acc ? acc.y : null,
+          z: acc ? acc.z : null,
+          including_gravity: accWithGravity
+            ? { x: accWithGravity.x, y: accWithGravity.y, z: accWithGravity.z }
+            : null,
+          interval_ms: typeof event.interval === "number" ? event.interval : null,
+        };
+      }
+
+      if (requested.includes("gyroscope")) {
+        const rot = event.rotationRate || null;
+        result.gyroscope = {
+          alpha: rot ? rot.alpha : null,
+          beta: rot ? rot.beta : null,
+          gamma: rot ? rot.gamma : null,
+          interval_ms: typeof event.interval === "number" ? event.interval : null,
+        };
+      }
+
+      return result;
+    }
+
+    async function collectOrientationData(requested, timeoutMs, warnings) {
+      if (!requested.includes("orientation")) {
+        return {};
+      }
+
+      if (typeof window.DeviceOrientationEvent === "undefined") {
+        warnings.push("orientation unsupported: DeviceOrientationEvent unavailable");
+        return {};
+      }
+
+      const orientationPermissionOk = await tryRequestIOSPermission("orientation");
+      if (!orientationPermissionOk) {
+        warnings.push("orientation blocked: orientation permission not granted");
+        return {};
+      }
+
+      const orientation = await listenOnceWithTimeout("deviceorientation", timeoutMs);
+      if (!orientation.ok || !orientation.event) {
+        warnings.push("orientation unavailable: no orientation event captured before timeout");
+        return {};
+      }
+
+      const event = orientation.event;
+      return {
+        orientation: {
+          alpha: typeof event.alpha === "number" ? event.alpha : null,
+          beta: typeof event.beta === "number" ? event.beta : null,
+          gamma: typeof event.gamma === "number" ? event.gamma : null,
+          absolute: typeof event.absolute === "boolean" ? event.absolute : null,
+        },
+      };
+    }
+
+    async function collectGeolocationData(requested, timeoutMs, warnings) {
+      if (!requested.includes("geolocation")) {
+        return {};
+      }
+
+      if (!navigator.geolocation || typeof navigator.geolocation.getCurrentPosition !== "function") {
+        warnings.push("geolocation unsupported: navigator.geolocation unavailable");
+        return {};
+      }
+
+      const pos = await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => resolve({ ok: true, position: position }),
+          (error) => resolve({ ok: false, error: error }),
+          {
+            enableHighAccuracy: false,
+            timeout: timeoutMs,
+            maximumAge: 10000,
+          }
+        );
+      });
+
+      if (!pos.ok || !pos.position) {
+        let detail = "unknown error";
+        if (pos.error && typeof pos.error.message === "string") {
+          detail = pos.error.message;
+        }
+        warnings.push("geolocation unavailable: " + detail);
+        return {};
+      }
+
+      const c = pos.position.coords;
+      return {
+        geolocation: {
+          latitude: c.latitude,
+          longitude: c.longitude,
+          accuracy_m: c.accuracy,
+          altitude: c.altitude,
+          altitude_accuracy: c.altitudeAccuracy,
+          heading: c.heading,
+          speed_mps: c.speed,
+        },
+      };
+    }
+
+    function buildSummary(readings, warnings, env) {
+      const keys = Object.keys(readings);
+      if (keys.length === 0) {
+        return env.is_mobile_guess
+          ? "No sensor readings were captured. The device may require permission, user gesture, or may block these APIs in this context."
+          : "No sensor readings were captured. This may not be a phone/mobile context or the browser environment blocks sensor APIs.";
+      }
+
+      const captured = keys.join(", ");
+      if (warnings.length === 0) {
+        return "Captured sensor snapshot: " + captured + ".";
+      }
+      return "Captured sensor snapshot: " + captured + ". Some sensors were unavailable.";
+    }
+
+    window["ai_edge_gallery_get_result"] = async (data) => {
+      try {
+        const parsed = data ? JSON.parse(data) : {};
+        const requested = normalizeRequestedSensors(parsed.sensors);
+        const timeoutMs = clampTimeout(parsed.timeout_ms);
+        const includeRaw = parsed.include_raw !== false;
+
+        const env = classifyEnvironment();
+        const warnings = [];
+
+        const capabilities = {
+          devicemotion: typeof window.DeviceMotionEvent !== "undefined",
+          deviceorientation: typeof window.DeviceOrientationEvent !== "undefined",
+          geolocation:
+            !!navigator.geolocation &&
+            typeof navigator.geolocation.getCurrentPosition === "function",
+        };
+
+        const [motionData, orientationData, geolocationData] = await Promise.all([
+          collectMotionData(requested, timeoutMs, warnings),
+          collectOrientationData(requested, timeoutMs, warnings),
+          collectGeolocationData(requested, timeoutMs, warnings),
+        ]);
+
+        const readings = Object.assign({}, motionData, orientationData, geolocationData);
+        const summary = buildSummary(readings, warnings, env);
+
+        let status = "ok";
+        const capturedCount = Object.keys(readings).length;
+        if (capturedCount === 0) {
+          status = capabilities.devicemotion || capabilities.deviceorientation || capabilities.geolocation
+            ? "unsupported"
+            : "unsupported";
+        } else if (warnings.length > 0) {
+          status = "partial";
+        }
+
+        return JSON.stringify({
+          result: summary,
+          status: status,
+          timestamp: nowIso(),
+          requested_sensors: requested,
+          device_context: env,
+          capabilities: capabilities,
+          readings: includeRaw ? readings : Object.keys(readings),
+          warnings: warnings,
+        });
+      } catch (e) {
+        return JSON.stringify({
+          error: "Failed to read sensors: " + (e && e.message ? e.message : String(e)),
+        });
+      }
+    };
+  </script>
+</body>
+</html>
