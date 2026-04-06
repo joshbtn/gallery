@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTML Page Replacer</title>
+</head>
+<body>
+  <script>
+    function normalizeInput(dataStr) {
+      let parsed = {};
+      if (typeof dataStr === "string" && dataStr.trim().length > 0) {
+        parsed = JSON.parse(dataStr);
+      }
+
+      const html = typeof parsed.html === "string"
+        ? parsed.html
+        : "<main><h1>Empty HTML input</h1><p>No content was provided.</p></main>";
+
+      const mode = parsed.mode === "body" ? "body" : "full";
+
+      return { html: html, mode: mode };
+    }
+
+    function replacePage(html, mode) {
+      if (mode === "body") {
+        if (!document.body) {
+          throw new Error("document.body is not available");
+        }
+        document.body.innerHTML = html;
+        return;
+      }
+
+      // Replace the full page after the tool function returns.
+      setTimeout(() => {
+        document.open();
+        document.write(html);
+        document.close();
+      }, 0);
+    }
+
+    window["ai_edge_gallery_get_result"] = async (dataStr) => {
+      try {
+        console.log("[html-page-replacer] received payload:", dataStr);
+        const input = normalizeInput(dataStr || "{}");
+
+        console.log("[html-page-replacer] mode:", input.mode);
+        console.log("[html-page-replacer] html length:", input.html.length);
+
+        replacePage(input.html, input.mode);
+
+        console.log("[html-page-replacer] page replacement scheduled/applied");
+
+        return JSON.stringify({
+          result: "HTML page replacement triggered. Check console logs for debug details."
+        });
+      } catch (e) {
+        console.error("[html-page-replacer] failed:", e);
+        return JSON.stringify({
+          error: "Failed to replace page: " + e.message
+        });
+      }
+    };
+  </script>
+</body>
+</html>
