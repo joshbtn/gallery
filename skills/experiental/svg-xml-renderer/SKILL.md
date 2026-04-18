@@ -15,6 +15,7 @@ You MUST call the `run_js` tool with the following exact parameters:
 - data: Prefer a JSON string with the following field:
   - svgXml: String. The full SVG XML content to render.
   - Ensure quotes are properly escaped if you use JSON.
+  - Example: `{"svgXml":"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"></svg>"}`
   - If escaping becomes error-prone, you may pass raw SVG XML text directly as `data`.
 
 If the user did not provide SVG XML, ask them to paste the full SVG XML first.
