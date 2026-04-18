@@ -12,8 +12,10 @@ Use this skill when the user wants to render, preview, or validate SVG markup.
 You MUST call the `run_js` tool with the following exact parameters:
 
 - script name: `index.html`
-- data: A JSON string with the following field:
+- data: Prefer a JSON string with the following field:
   - svgXml: String. The full SVG XML content to render.
+  - Ensure quotes are properly escaped if you use JSON.
+  - If escaping becomes error-prone, you may pass raw SVG XML text directly as `data`.
 
 If the user did not provide SVG XML, ask them to paste the full SVG XML first.
 

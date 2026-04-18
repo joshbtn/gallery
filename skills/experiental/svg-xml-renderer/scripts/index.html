@@ -9,17 +9,58 @@
   <canvas id="canvas" style="display: none;"></canvas>
 
   <script>
+    function extractSvgMarkup(text) {
+      if (typeof text !== "string") return "";
+      const lower = text.toLowerCase();
+      const start = lower.indexOf("<svg");
+      if (start < 0) return "";
+
+      const end = lower.lastIndexOf("</svg>");
+      if (end > start) {
+        return text.slice(start, end + 6).trim();
+      }
+
+      return text.slice(start).trim();
+    }
+
     function parseSvgInput(dataStr) {
-      const parsed = typeof dataStr === "string" && dataStr.trim().length > 0
-        ? JSON.parse(dataStr)
-        : {};
-      const svgXml = typeof parsed.svgXml === "string" ? parsed.svgXml.trim() : "";
+      const rawInput = typeof dataStr === "string" ? dataStr.trim() : "";
+      if (!rawInput) {
+        throw new Error("svgXml is required.");
+      }
+
+      if (rawInput.toLowerCase().startsWith("<svg")) {
+        return rawInput;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(rawInput);
+      } catch (jsonError) {
+        const recoveredSvg = extractSvgMarkup(rawInput);
+        if (recoveredSvg) {
+          return recoveredSvg;
+        }
+        throw new Error(`Invalid JSON input: ${jsonError.message}`);
+      }
+
+      let svgXml = "";
+      if (typeof parsed === "string") {
+        svgXml = parsed.trim();
+      } else if (parsed && typeof parsed.svgXml === "string") {
+        svgXml = parsed.svgXml.trim();
+      }
+
+      if (!svgXml) {
+        svgXml = extractSvgMarkup(rawInput);
+      }
       if (!svgXml) {
         throw new Error("svgXml is required.");
       }
       if (!svgXml.toLowerCase().includes("<svg")) {
         throw new Error("svgXml must contain a valid <svg> root element.");
       }
+
       return svgXml;
     }
 
