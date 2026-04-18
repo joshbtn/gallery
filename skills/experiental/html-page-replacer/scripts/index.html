@@ -7,6 +7,8 @@
 </head>
 <body>
   <script>
+    const BODY_MODE_CONTAINER_ID = "ai-edge-gallery-html-page-replacer-container";
+
     function normalizeInput(dataStr) {
       let parsed = {};
       if (typeof dataStr === "string" && dataStr.trim().length > 0) {
@@ -27,11 +29,10 @@
         if (!document.body) {
           throw new Error("document.body is not available");
         }
-        const containerId = "ai-edge-gallery-html-page-replacer-container";
-        let container = document.getElementById(containerId);
+        let container = document.getElementById(BODY_MODE_CONTAINER_ID);
         if (!container) {
           container = document.createElement("div");
-          container.id = containerId;
+          container.id = BODY_MODE_CONTAINER_ID;
           document.body.appendChild(container);
         }
         container.innerHTML = html;
