@@ -13,11 +13,12 @@
       if (typeof text !== "string") return "";
       const lower = text.toLowerCase();
       const start = lower.indexOf("<svg");
+      const svgEndTag = "</svg>";
       if (start < 0) return "";
 
-      const end = lower.lastIndexOf("</svg>");
+      const end = lower.lastIndexOf(svgEndTag);
       if (end > start) {
-        return text.slice(start, end + 6).trim();
+        return text.slice(start, end + svgEndTag.length).trim();
       }
 
       return text.slice(start).trim();
