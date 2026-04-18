@@ -10,18 +10,36 @@
     const BODY_MODE_CONTAINER_ID = "html-page-replacer-container";
 
     function normalizeInput(dataStr) {
-      let parsed = {};
-      if (typeof dataStr === "string" && dataStr.trim().length > 0) {
-        parsed = JSON.parse(dataStr);
+      const trimmed = typeof dataStr === "string" ? dataStr.trim() : "";
+
+      if (trimmed.length === 0) {
+        return {
+          html: "<main><h1>Empty HTML input</h1><p>No content was provided.</p></main>",
+          mode: "full"
+        };
       }
 
-      const html = typeof parsed.html === "string"
-        ? parsed.html
-        : "<main><h1>Empty HTML input</h1><p>No content was provided.</p></main>";
+      // Try JSON first; fall back to treating the whole string as raw HTML.
+      let parsed = null;
+      try {
+        const candidate = JSON.parse(trimmed);
+        if (candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)) {
+          parsed = candidate;
+        }
+      } catch (_) {
+        // not JSON — treat as raw HTML below
+      }
 
-      const mode = parsed.mode === "body" ? "body" : "full";
+      if (parsed) {
+        const html = typeof parsed.html === "string"
+          ? parsed.html
+          : "<main><h1>Empty HTML input</h1><p>No content was provided.</p></main>";
+        const mode = parsed.mode === "body" ? "body" : "full";
+        return { html, mode };
+      }
 
-      return { html: html, mode: mode };
+      // Raw HTML string passed directly.
+      return { html: trimmed, mode: "full" };
     }
 
     function replacePage(html, mode) {

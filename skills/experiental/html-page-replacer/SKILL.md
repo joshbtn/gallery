@@ -18,17 +18,27 @@ Use this skill to quickly test HTML page prototypes by replacing the current doc
 You MUST call the `run_js` tool with the following exact parameters:
 
 - script name: `index.html`
-- data: A JSON string with the following fields:
-  - html: String. The HTML content to render by replacing the current page.
+- data: Either a raw HTML string **or** a JSON object string with the following fields:
+  - html: String. The HTML content to render.
   - mode: Optional string. `full` (default) replaces the whole document; `body` inserts HTML into a dedicated container `<div>` inside `document.body`.
 
-If user-provided HTML is missing, send:
+Both of these are valid `data` values:
+
+```html
+<main><h1>Hello</h1></main>
+```
 
 ```json
 {
-  "html": "<main><h1>Empty HTML input</h1><p>No content was provided.</p></main>",
+  "html": "<main><h1>Hello</h1></main>",
   "mode": "body"
 }
+```
+
+If user-provided HTML is missing, send:
+
+```html
+<main><h1>Empty HTML input</h1><p>No content was provided.</p></main>
 ```
 
 After tool execution:
