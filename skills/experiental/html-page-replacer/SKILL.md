@@ -20,7 +20,7 @@ You MUST call the `run_js` tool with the following exact parameters:
 - script name: `index.html`
 - data: A JSON string with the following fields:
   - html: String. The HTML content to render by replacing the current page.
-  - mode: Optional string. `full` (default) replaces the whole document; `body` replaces only `document.body`.
+  - mode: Optional string. `full` (default) replaces the whole document; `body` inserts HTML into a dedicated container `<div>` inside `document.body`.
 
 If user-provided HTML is missing, send:
 

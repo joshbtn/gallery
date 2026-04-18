@@ -27,7 +27,14 @@
         if (!document.body) {
           throw new Error("document.body is not available");
         }
-        document.body.innerHTML = html;
+        const containerId = "ai-edge-gallery-html-page-replacer-container";
+        let container = document.getElementById(containerId);
+        if (!container) {
+          container = document.createElement("div");
+          container.id = containerId;
+          document.body.appendChild(container);
+        }
+        container.innerHTML = html;
         return;
       }
 
