@@ -26,7 +26,7 @@
     function parseSvgInput(dataStr) {
       const rawInput = typeof dataStr === "string" ? dataStr.trim() : "";
       if (!rawInput) {
-        throw new Error("svgXml is required.");
+        throw new Error("Input data is required.");
       }
 
       if (rawInput.toLowerCase().startsWith("<svg")) {
@@ -51,9 +51,6 @@
         svgXml = parsed.svgXml.trim();
       }
 
-      if (!svgXml) {
-        svgXml = extractSvgMarkup(rawInput);
-      }
       if (!svgXml) {
         throw new Error("svgXml is required.");
       }
