@@ -1,0 +1,50 @@
+name: Android CI Test APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+    paths:
+      - 'Android/**'
+  pull_request:
+    paths:
+      - 'Android/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-apk-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_test_apk:
+    name: Build Debug APK Artifact
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Android/src
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk-${{ github.run_number }}
+          path: Android/src/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 2
