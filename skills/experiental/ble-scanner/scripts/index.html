@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLE Scanner</title>
+</head>
+<body>
+  <script>
+    const DEFAULT_TIMEOUT_MS = 5000;
+
+    function clampTimeout(value) {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        return DEFAULT_TIMEOUT_MS;
+      }
+      return Math.min(Math.max(Math.floor(value), 1000), 20000);
+    }
+
+    function nowIso() {
+      return new Date().toISOString();
+    }
+
+    function classifyEnvironment() {
+      const ua = navigator.userAgent || "";
+      const lowerUa = ua.toLowerCase();
+      const isMobileGuess = /(android|iphone|ipad|ipod|mobile)/.test(lowerUa);
+      return {
+        user_agent: ua,
+        is_mobile_guess: isMobileGuess,
+      };
+    }
+
+    async function collectGeolocation(timeoutMs, warnings) {
+      if (!navigator.geolocation || typeof navigator.geolocation.getCurrentPosition !== "function") {
+        warnings.push("geolocation unsupported: navigator.geolocation unavailable");
+        return null;
+      }
+
+      const pos = await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => resolve({ ok: true, position: position }),
+          (error) => resolve({ ok: false, error: error }),
+          {
+            enableHighAccuracy: false,
+            timeout: timeoutMs,
+            maximumAge: 10000,
+          }
+        );
+      });
+
+      if (!pos.ok || !pos.position) {
+        let detail = "unknown error";
+        if (pos.error && typeof pos.error.message === "string") {
+          detail = pos.error.message;
+        }
+        warnings.push("geolocation unavailable: " + detail);
+        return null;
+      }
+
+      const c = pos.position.coords;
+      return {
+        latitude: c.latitude,
+        longitude: c.longitude,
+        accuracy_m: c.accuracy,
+        altitude: c.altitude,
+        altitude_accuracy_m: c.altitudeAccuracy,
+        heading: c.heading,
+        speed_mps: c.speed,
+      };
+    }
+
+    function deviceToObject(device) {
+      return {
+        id: device.id || null,
+        name: device.name || null,
+        gatt_connected: device.gatt ? device.gatt.connected : null,
+      };
+    }
+
+    async function scanBle(warnings) {
+      if (!navigator.bluetooth || typeof navigator.bluetooth.getAvailability !== "function") {
+        warnings.push("ble unsupported: navigator.bluetooth unavailable");
+        return { previously_known: [], picked: null };
+      }
+
+      const available = await navigator.bluetooth.getAvailability().catch(() => false);
+      if (!available) {
+        warnings.push("ble unavailable: Bluetooth adapter not available or not enabled");
+        return { previously_known: [], picked: null };
+      }
+
+      // Collect devices previously granted access (no UI needed).
+      let previouslyKnown = [];
+      if (typeof navigator.bluetooth.getDevices === "function") {
+        const knownDevices = await navigator.bluetooth.getDevices().catch((e) => {
+          warnings.push("ble getDevices error: " + (e && e.message ? e.message : String(e)));
+          return [];
+        });
+        previouslyKnown = knownDevices.map(deviceToObject);
+      }
+
+      // Prompt the user to pick a BLE device via the system picker.
+      let picked = null;
+      if (typeof navigator.bluetooth.requestDevice === "function") {
+        const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true }).catch((e) => {
+          // User dismissed the picker or permission denied — not a hard error.
+          warnings.push("ble requestDevice: " + (e && e.message ? e.message : String(e)));
+          return null;
+        });
+        if (device) {
+          picked = deviceToObject(device);
+        }
+      } else {
+        warnings.push("ble requestDevice unsupported");
+      }
+
+      return { previously_known: previouslyKnown, picked: picked };
+    }
+
+    function buildSummary(bleResult, geolocation, warnings) {
+      const knownCount = bleResult.previously_known.length;
+      const hasPicked = bleResult.picked !== null;
+      const hasLocation = geolocation !== null;
+
+      const parts = [];
+
+      if (knownCount > 0) {
+        parts.push(knownCount + " previously-known BLE device(s) returned");
+      }
+      if (hasPicked) {
+        const pickedName = bleResult.picked.name || "(unnamed)";
+        parts.push("user selected device: \"" + pickedName + "\"");
+      }
+      if (!hasPicked && knownCount === 0 && warnings.some((w) => w.startsWith("ble"))) {
+        parts.push("no BLE devices discovered");
+      }
+      if (hasLocation) {
+        parts.push("geolocation captured");
+      }
+
+      if (parts.length === 0) {
+        return "BLE scan completed with no results.";
+      }
+      return "BLE scan result: " + parts.join("; ") + ".";
+    }
+
+    window["ai_edge_gallery_get_result"] = async (data) => {
+      try {
+        const parsed = data ? JSON.parse(data) : {};
+        const includeLocation = parsed.include_location !== false;
+        const timeoutMs = clampTimeout(parsed.timeout_ms);
+
+        const env = classifyEnvironment();
+        const warnings = [];
+
+        const bleResult = await scanBle(warnings);
+
+        let geolocation = null;
+        if (includeLocation) {
+          geolocation = await collectGeolocation(timeoutMs, warnings);
+        }
+
+        const summary = buildSummary(bleResult, geolocation, warnings);
+
+        const allDevices = bleResult.previously_known.slice();
+        if (bleResult.picked !== null) {
+          const alreadyListed = allDevices.some((d) => d.id === bleResult.picked.id);
+          if (!alreadyListed) {
+            allDevices.push(bleResult.picked);
+          }
+        }
+
+        let status = "ok";
+        if (allDevices.length === 0 && geolocation === null) {
+          status = "unsupported";
+        } else if (warnings.length > 0) {
+          status = "partial";
+        }
+
+        return JSON.stringify({
+          result: summary,
+          status: status,
+          timestamp: nowIso(),
+          device_context: env,
+          ble: {
+            previously_known: bleResult.previously_known,
+            picked: bleResult.picked,
+            all_devices: allDevices,
+          },
+          geolocation: geolocation,
+          warnings: warnings,
+        });
+      } catch (e) {
+        return JSON.stringify({
+          error: "BLE scan failed: " + (e && e.message ? e.message : String(e)),
+        });
+      }
+    };
+  </script>
+</body>
+</html>
