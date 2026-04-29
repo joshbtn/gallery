@@ -19,6 +19,8 @@ package com.google.ai.edge.gallery.ui.llmchat
 import androidx.hilt.navigation.compose.hiltViewModel
 
 import android.graphics.Bitmap
+import android.os.Bundle
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,11 +35,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.os.bundleOf
 import com.google.ai.edge.gallery.GalleryEvent
 import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.data.Model
+import com.google.ai.edge.gallery.data.ModelCapability
 import com.google.ai.edge.gallery.data.RuntimeType
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.firebaseAnalytics
@@ -71,6 +73,7 @@ fun LlmChatScreen(
   sendMessageTrigger: SendMessageTrigger? = null,
   showImagePicker: Boolean = false,
   showAudioPicker: Boolean = false,
+  getActiveSkills: () -> List<String> = { emptyList() },
 ) {
   ChatViewWrapper(
     viewModel = viewModel,
@@ -90,6 +93,7 @@ fun LlmChatScreen(
     sendMessageTrigger = sendMessageTrigger,
     showImagePicker = showImagePicker,
     showAudioPicker = showAudioPicker,
+    getActiveSkills = getActiveSkills,
   )
 }
 
@@ -187,10 +191,10 @@ fun ChatViewWrapper(
   sendMessageTrigger: SendMessageTrigger? = null,
   showImagePicker: Boolean = false,
   showAudioPicker: Boolean = false,
+  getActiveSkills: () -> List<String> = { emptyList() },
 ) {
   val context = LocalContext.current
   val task = modelManagerViewModel.getTaskById(id = taskId)!!
-  val allowThinking = task.allowThinking()
 
   ChatView(
     task = task,
@@ -235,12 +239,26 @@ fun ChatViewWrapper(
               modelManagerViewModel = modelManagerViewModel,
             )
           },
-          allowThinking = allowThinking,
+          allowThinking = task.allowCapability(ModelCapability.LLM_THINKING, model),
         )
 
+        val activeSkills = getActiveSkills()
+        Log.d(
+          TAG,
+          "Analytics: generate_action, capability_name=${task.id}, active_skills=${activeSkills.joinToString(",")}",
+        )
         firebaseAnalytics?.logEvent(
           GalleryEvent.GENERATE_ACTION.id,
-          bundleOf("capability_name" to task.id, "model_id" to model.name),
+          Bundle().apply {
+            putString("capability_name", task.id)
+            putString("model_id", model.name)
+            putBoolean("has_image", images.isNotEmpty())
+            putInt("image_count", images.size)
+            putBoolean("has_audio", audioMessages.isNotEmpty())
+            putInt("audio_count", audioMessages.size)
+            putInt("active_skills_count", activeSkills.size)
+            putString("active_skills_list", activeSkills.joinToString(","))
+          },
         )
       }
     },
@@ -258,7 +276,7 @@ fun ChatViewWrapper(
               modelManagerViewModel = modelManagerViewModel,
             )
           },
-          allowThinking = allowThinking,
+          allowThinking = task.allowCapability(ModelCapability.LLM_THINKING, model),
         )
       }
     },
