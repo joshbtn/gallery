@@ -445,8 +445,11 @@ private fun ErrorCard(message: String, onRetry: () -> Unit, modifier: Modifier =
         )
         Text("Search failed", style = MaterialTheme.typography.titleSmall)
       }
-      Text(message, style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Text(
+        message,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
       Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("Retry") }
     }
   }
@@ -593,8 +596,10 @@ private fun QuantizationSelector(
         SegmentedButton(
           selected = selected == format,
           onClick = { onSelected(format) },
-          shape = SegmentedButtonDefaults.itemShape(index = index,
-            count = QuantizationFormat.entries.size),
+          shape = SegmentedButtonDefaults.itemShape(
+            index = index,
+            count = QuantizationFormat.entries.size,
+          ),
           label = { Text(format.label) },
         )
       }

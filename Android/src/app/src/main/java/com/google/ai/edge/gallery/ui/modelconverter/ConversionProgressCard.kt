@@ -47,8 +47,11 @@ fun ConversionProgressCard(
     modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
     verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
-    Text(label, style = MaterialTheme.typography.labelMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(
+      label,
+      style = MaterialTheme.typography.labelMedium,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 
     if (progress == null) {
       // Indeterminate.

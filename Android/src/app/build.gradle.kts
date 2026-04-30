@@ -56,6 +56,21 @@ android {
       signingConfig = signingConfigs.getByName("debug")
     }
   }
+
+  flavorDimensions += "distribution"
+  productFlavors {
+    create("standard") {
+      dimension = "distribution"
+      // No overrides – uses defaultConfig values.
+    }
+    create("nightly") {
+      dimension = "distribution"
+      applicationIdSuffix = ".nightly"
+      versionNameSuffix = "-nightly"
+      manifestPlaceholders["appIcon"] = "@mipmap/ic_launcher"
+      resValue("string", "app_name", "Edge Gallery Nightly")
+    }
+  }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
