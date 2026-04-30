@@ -643,11 +643,6 @@ constructor(
         Log.d(TAG, "duplicated imported model found in task. Removing it first")
         task.models.removeAt(modelIndex)
       }
-      // Skip tasks that the user has explicitly disabled for this model.
-      if (model.disabledForTaskIds.contains(task.id)) {
-        task.updateTrigger.value = System.currentTimeMillis()
-        continue
-      }
       if (
         (task.id == BuiltInTaskId.LLM_ASK_IMAGE && model.llmSupportImage) ||
           (task.id == BuiltInTaskId.LLM_ASK_AUDIO && model.llmSupportAudio) ||
@@ -701,65 +696,6 @@ constructor(
     importedModels.add(info)
     dataStoreRepository.saveImportedModels(importedModels = importedModels)
   }
-
-  /**
-   * Updates the set of task IDs for which an imported model is disabled, then refreshes all tasks.
-   *
-   * This is called from the "Available in tasks" toggle UI in the model manager. Removing a model
-   * from a task removes it from the in-memory task model list and persists the change to the data
-   * store so the setting survives app restart.
-   */
-  fun updateImportedModelTaskAvailability(model: Model, disabledTaskIds: Set<String>) {
-    Log.d(TAG, "Updating task availability for ${model.name}: disabled=$disabledTaskIds")
-
-    val allTaskIds =
-      setOf(
-        BuiltInTaskId.LLM_CHAT,
-        BuiltInTaskId.LLM_PROMPT_LAB,
-        BuiltInTaskId.LLM_AGENT_CHAT,
-        BuiltInTaskId.LLM_ASK_IMAGE,
-        BuiltInTaskId.LLM_ASK_AUDIO,
-        BuiltInTaskId.LLM_TINY_GARDEN,
-        BuiltInTaskId.LLM_MOBILE_ACTIONS,
-      )
-
-    for (task in getTasksByIds(ids = allTaskIds)) {
-      val currentIndex = task.models.indexOfFirst { it.name == model.name && it.imported }
-      val shouldBeEnabled = !disabledTaskIds.contains(task.id) &&
-        when (task.id) {
-          BuiltInTaskId.LLM_ASK_IMAGE -> model.llmSupportImage
-          BuiltInTaskId.LLM_ASK_AUDIO -> model.llmSupportAudio
-          BuiltInTaskId.LLM_TINY_GARDEN -> model.llmSupportTinyGarden
-          BuiltInTaskId.LLM_MOBILE_ACTIONS -> model.llmSupportMobileActions
-          else -> true
-        }
-      if (shouldBeEnabled && currentIndex < 0) {
-        task.models.add(model)
-      } else if (!shouldBeEnabled && currentIndex >= 0) {
-        task.models.removeAt(currentIndex)
-      }
-      task.updateTrigger.value = System.currentTimeMillis()
-    }
-
-    // Persist the update.
-    val importedModels = dataStoreRepository.readImportedModels().toMutableList()
-    val idx = importedModels.indexOfFirst { it.fileName == model.name }
-    if (idx >= 0) {
-      val existing = importedModels[idx]
-      val updated =
-        existing.toBuilder().clearDisabledForTaskIds().addAllDisabledForTaskIds(disabledTaskIds).build()
-      importedModels[idx] = updated
-      dataStoreRepository.saveImportedModels(importedModels = importedModels)
-    }
-
-    _uiState.update {
-      uiState.value.copy(
-        tasks = uiState.value.tasks.toList(),
-        modelImportingUpdateTrigger = System.currentTimeMillis(),
-      )
-    }
-  }
-
   fun getTokenStatusAndData(): TokenStatusAndData {
     // Try to load token data from DataStore.
     var tokenStatus = TokenStatus.NOT_STORED
@@ -1191,30 +1127,24 @@ constructor(
       // Create model.
       val model = createModelFromImportedModelInfo(info = importedModel)
 
-      // Add to task, respecting user-configured per-task availability.
-      if (!model.disabledForTaskIds.contains(BuiltInTaskId.LLM_CHAT)) {
-        tasks.get(key = BuiltInTaskId.LLM_CHAT)?.models?.add(model)
-      }
-      if (!model.disabledForTaskIds.contains(BuiltInTaskId.LLM_PROMPT_LAB)) {
-        tasks.get(key = BuiltInTaskId.LLM_PROMPT_LAB)?.models?.add(model)
-      }
-      if (!model.disabledForTaskIds.contains(BuiltInTaskId.LLM_AGENT_CHAT)) {
-        tasks.get(key = BuiltInTaskId.LLM_AGENT_CHAT)?.models?.add(model)
-      }
-      if (model.llmSupportImage && !model.disabledForTaskIds.contains(BuiltInTaskId.LLM_ASK_IMAGE)) {
+      // Add to task.
+      tasks.get(key = BuiltInTaskId.LLM_CHAT)?.models?.add(model)
+      tasks.get(key = BuiltInTaskId.LLM_PROMPT_LAB)?.models?.add(model)
+      tasks.get(key = BuiltInTaskId.LLM_AGENT_CHAT)?.models?.add(model)
+      if (model.llmSupportImage) {
         tasks.get(key = BuiltInTaskId.LLM_ASK_IMAGE)?.models?.add(model)
       }
-      if (model.llmSupportAudio && !model.disabledForTaskIds.contains(BuiltInTaskId.LLM_ASK_AUDIO)) {
+      if (model.llmSupportAudio) {
         tasks.get(key = BuiltInTaskId.LLM_ASK_AUDIO)?.models?.add(model)
       }
-      if (model.llmSupportTinyGarden && !model.disabledForTaskIds.contains(BuiltInTaskId.LLM_TINY_GARDEN)) {
+      if (model.llmSupportTinyGarden) {
         tasks.get(key = BuiltInTaskId.LLM_TINY_GARDEN)?.models?.add(model)
         val newConfigs = model.configs.toMutableList()
         newConfigs.add(RESET_CONVERSATION_TURN_COUNT_CONFIG)
         model.configs = newConfigs
         model.preProcess()
       }
-      if (model.llmSupportMobileActions && !model.disabledForTaskIds.contains(BuiltInTaskId.LLM_MOBILE_ACTIONS)) {
+      if (model.llmSupportMobileActions) {
         tasks.get(key = BuiltInTaskId.LLM_MOBILE_ACTIONS)?.models?.add(model)
       }
 
@@ -1258,7 +1188,6 @@ constructor(
     val llmSupportTinyGarden = info.llmConfig.supportTinyGarden
     val llmSupportMobileActions = info.llmConfig.supportMobileActions
     val llmSupportThinking = info.llmConfig.supportThinking
-    val disabledForTaskIds = info.disabledForTaskIdsList.toSet()
     val configs: MutableList<Config> =
       createLlmChatConfigs(
           defaultMaxToken = llmMaxToken,
@@ -1283,7 +1212,6 @@ constructor(
         llmSupportAudio = llmSupportAudio,
         llmSupportTinyGarden = llmSupportTinyGarden,
         llmSupportMobileActions = llmSupportMobileActions,
-        disabledForTaskIds = disabledForTaskIds,
         capabilities =
           if (llmSupportThinking) listOf(ModelCapability.LLM_THINKING) else emptyList(),
         capabilityToTaskTypes =

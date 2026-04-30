@@ -237,8 +237,7 @@ private fun HuggingFaceTab(
       },
       modifier = Modifier.fillMaxWidth(),
       enabled = uiState.hfRepoId.isNotBlank() &&
-        uiState.hfSearchState !is HfSearchState.Searching &&
-        uiState.hfSearchState !is HfSearchState.Downloading,
+        uiState.hfSearchState !is HfSearchState.Searching,
     ) {
       Icon(
         Icons.Outlined.Search,
@@ -253,13 +252,7 @@ private fun HuggingFaceTab(
       is HfSearchState.Searching ->
         ConversionProgressCard(label = stringResource(R.string.converter_searching))
 
-      is HfSearchState.Downloading ->
-        ConversionProgressCard(label = stringResource(R.string.converter_downloading))
-
-      is HfSearchState.Found -> FoundModelCard(state = state, viewModel = viewModel)
-
-      is HfSearchState.Downloaded ->
-        SuccessCard(fileName = state.fileName)
+      is HfSearchState.Found -> FoundModelCard(state = state, context = context)
 
       is HfSearchState.NotFound ->
         NotFoundCard(
@@ -281,7 +274,7 @@ private fun HuggingFaceTab(
 @Composable
 private fun FoundModelCard(
   state: HfSearchState.Found,
-  viewModel: ModelConverterViewModel,
+  context: Context,
   modifier: Modifier = Modifier,
 ) {
   Card(modifier = modifier.fillMaxWidth()) {
@@ -305,33 +298,22 @@ private fun FoundModelCard(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
       Text(
-        "Tap Download to save the pre-converted model and make it available in the app.",
+        "Open the download page in your browser. Once saved to your device, import the " +
+          ".task file using the + button on the Models screen.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
-    }
-  }
-}
-
-@Composable
-private fun SuccessCard(fileName: String, modifier: Modifier = Modifier) {
-  Card(modifier = modifier.fillMaxWidth()) {
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Row(verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      Button(
+        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(state.downloadUrl))) },
+        modifier = Modifier.fillMaxWidth(),
+      ) {
         Icon(
-          Icons.Outlined.CheckCircle,
+          Icons.Outlined.OpenInBrowser,
           contentDescription = null,
-          tint = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.size(20.dp),
+          modifier = Modifier.padding(end = 8.dp).size(18.dp),
         )
-        Text("Model downloaded!", style = MaterialTheme.typography.titleSmall)
+        Text("Open Download Page")
       }
-      Text(
-        "\"$fileName\" has been downloaded. Go to the Models screen to use it.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
     }
   }
 }

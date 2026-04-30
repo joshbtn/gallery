@@ -42,10 +42,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
 import androidx.compose.material.icons.automirrored.rounded.ListAlt
@@ -56,7 +54,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -91,7 +88,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.google.ai.edge.gallery.R
-import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.RuntimeType
 import com.google.ai.edge.gallery.data.Task
@@ -322,21 +318,15 @@ fun GlobalModelManager(
           }
         }
         items(importedModels) { model ->
-          Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            ModelItem(
-              model = model,
-              task = null,
-              modelManagerViewModel = viewModel,
-              onModelClicked = handleClickModel,
-              onBenchmarkClicked = onBenchmarkClicked,
-              expanded = true,
-              showBenchmarkButton = model.runtimeType == RuntimeType.LITERT_LM,
-            )
-            ImportedModelTaskAvailability(
-              model = model,
-              viewModel = viewModel,
-            )
-          }
+          ModelItem(
+            model = model,
+            task = null,
+            modelManagerViewModel = viewModel,
+            onModelClicked = handleClickModel,
+            onBenchmarkClicked = onBenchmarkClicked,
+            expanded = true,
+            showBenchmarkButton = model.runtimeType == RuntimeType.LITERT_LM,
+          )
         }
       }
 
@@ -543,84 +533,4 @@ private fun getFileName(context: Context, uri: Uri): String? {
     return uri.lastPathSegment
   }
   return null
-}
-
-/**
- * Shows a row of filter chips that control which tasks an imported model is available in.
- *
- * Each chip represents one LLM task. When the user deselects a chip the model is removed from
- * that task; when they reselect it the model is added back. Changes are persisted immediately
- * via [ModelManagerViewModel.updateImportedModelTaskAvailability].
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ImportedModelTaskAvailability(
-  model: Model,
-  viewModel: ModelManagerViewModel,
-  modifier: Modifier = Modifier,
-) {
-  // All LLM tasks and their human-readable labels.
-  val allTasks =
-    listOf(
-      BuiltInTaskId.LLM_CHAT to "Chat",
-      BuiltInTaskId.LLM_PROMPT_LAB to "Prompt Lab",
-      BuiltInTaskId.LLM_AGENT_CHAT to "Agent Chat",
-      BuiltInTaskId.LLM_ASK_IMAGE to "Ask Image",
-      BuiltInTaskId.LLM_ASK_AUDIO to "Ask Audio",
-      BuiltInTaskId.LLM_TINY_GARDEN to "Tiny Garden",
-      BuiltInTaskId.LLM_MOBILE_ACTIONS to "Mobile Actions",
-    )
-
-  // Only show tasks that the model is capable of supporting.
-  val capableTasks =
-    allTasks.filter { (taskId, _) ->
-      when (taskId) {
-        BuiltInTaskId.LLM_ASK_IMAGE -> model.llmSupportImage
-        BuiltInTaskId.LLM_ASK_AUDIO -> model.llmSupportAudio
-        BuiltInTaskId.LLM_TINY_GARDEN -> model.llmSupportTinyGarden
-        BuiltInTaskId.LLM_MOBILE_ACTIONS -> model.llmSupportMobileActions
-        else -> true
-      }
-    }
-
-  // Local mutable list tracking which task IDs are currently disabled.
-  val disabledTaskIds =
-    remember(model.name, model.disabledForTaskIds) {
-      mutableStateListOf<String>().also { it.addAll(model.disabledForTaskIds) }
-    }
-
-  Column(
-    modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-    verticalArrangement = Arrangement.spacedBy(4.dp),
-  ) {
-    Text(
-      stringResource(R.string.model_available_in_tasks),
-      style = MaterialTheme.typography.labelSmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-      modifier = Modifier.padding(start = 4.dp),
-    )
-    Row(
-      modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-      horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-      for ((taskId, label) in capableTasks) {
-        val enabled = !disabledTaskIds.contains(taskId)
-        FilterChip(
-          selected = enabled,
-          onClick = {
-            if (enabled) {
-              disabledTaskIds.add(taskId)
-            } else {
-              disabledTaskIds.remove(taskId)
-            }
-            viewModel.updateImportedModelTaskAvailability(
-              model = model,
-              disabledTaskIds = disabledTaskIds.toSet(),
-            )
-          },
-          label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-        )
-      }
-    }
-  }
 }

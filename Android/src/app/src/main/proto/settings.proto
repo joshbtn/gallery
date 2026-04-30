@@ -46,9 +46,6 @@ message ImportedModel {
   oneof config {
     LlmConfig llm_config = 3;
   }
-
-  // Task IDs for which the model is disabled (user-controlled per-task visibility).
-  repeated string disabled_for_task_ids = 4;
 }
 
 message LlmConfig {

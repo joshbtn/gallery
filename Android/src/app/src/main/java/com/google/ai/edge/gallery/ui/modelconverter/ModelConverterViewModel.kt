@@ -41,15 +41,13 @@ enum class QuantizationFormat(val label: String, val flag: String) {
 /** Tabs in the converter screen. */
 enum class ConverterTab { HUGGING_FACE, LOCAL_FILE }
 
-/** State for the HuggingFace search / download flow. */
+/** State for the HuggingFace search flow. */
 sealed class HfSearchState {
   object Idle : HfSearchState()
   object Searching : HfSearchState()
   data class Found(val repoId: String, val fileName: String, val downloadUrl: String) :
     HfSearchState()
   object NotFound : HfSearchState()
-  object Downloading : HfSearchState()
-  data class Downloaded(val fileName: String) : HfSearchState()
   data class Error(val message: String) : HfSearchState()
 }
 
