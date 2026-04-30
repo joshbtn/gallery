@@ -42,4 +42,5 @@ object Category {
   val CLASSICAL_ML = CategoryInfo(id = "classical_ml", labelStringRes = R.string.category_llm)
   val EXPERIMENTAL =
     CategoryInfo(id = "experimental", labelStringRes = R.string.category_experimental)
+  val TOOLS = CategoryInfo(id = "tools", labelStringRes = R.string.category_tools)
 }

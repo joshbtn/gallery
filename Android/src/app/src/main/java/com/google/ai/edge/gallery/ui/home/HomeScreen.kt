@@ -60,6 +60,7 @@ import androidx.compose.material.icons.automirrored.rounded.ListAlt
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Transform
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -162,6 +163,7 @@ fun HomeScreen(
   tosViewModel: TosViewModel,
   navigateToTaskScreen: (Task) -> Unit,
   onModelsClicked: () -> Unit,
+  onModelConverterClicked: () -> Unit,
   enableAnimation: Boolean,
   modifier: Modifier = Modifier,
   gm4: Boolean = false,
@@ -282,7 +284,7 @@ fun HomeScreen(
         drawerState = drawerState,
         drawerContent = {
           ModalDrawerSheet {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
               Row(modifier = Modifier.fillMaxWidth()) {
                 SquareDrawerItem(
                   label = stringResource(R.string.drawer_settings_label),
@@ -324,6 +326,30 @@ fun HomeScreen(
                         )
                     ),
                 )
+              }
+              Row(modifier = Modifier.fillMaxWidth()) {
+                SquareDrawerItem(
+                  label = stringResource(R.string.drawer_converter_label),
+                  description = stringResource(R.string.drawer_converter_description),
+                  icon = Icons.Rounded.Transform,
+                  onClick = {
+                    scope.launch { drawerState.close() }
+                    scope.launch {
+                      delay(50)
+                      onModelConverterClicked()
+                    }
+                  },
+                  modifier = Modifier.weight(1f),
+                  iconBrush =
+                    linearGradient(
+                      colors =
+                        listOf(
+                          MaterialTheme.customColors.taskBgGradientColors[0][0],
+                          MaterialTheme.customColors.taskBgGradientColors[0][1],
+                        )
+                    ),
+                )
+                Spacer(modifier = Modifier.weight(1f).padding(start = 16.dp))
               }
             }
           }

@@ -82,6 +82,7 @@ import com.google.ai.edge.gallery.ui.common.ModelPageAppBar
 import com.google.ai.edge.gallery.ui.common.chat.ModelDownloadStatusInfoPanel
 import com.google.ai.edge.gallery.ui.home.HomeScreen
 import com.google.ai.edge.gallery.ui.home.PromoScreenGm4
+import com.google.ai.edge.gallery.ui.modelconverter.ModelConverterScreen
 import com.google.ai.edge.gallery.ui.modelmanager.GlobalModelManager
 import com.google.ai.edge.gallery.ui.modelmanager.ModelInitializationStatusType
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManager
@@ -96,6 +97,7 @@ private const val ROUTE_MODEL_LIST = "model_list"
 private const val ROUTE_MODEL = "route_model"
 private const val ROUTE_BENCHMARK = "benchmark"
 private const val ROUTE_MODEL_MANAGER = "model_manager"
+private const val ROUTE_MODEL_CONVERTER = "model_converter"
 private const val ENTER_ANIMATION_DURATION_MS = 500
 private val ENTER_ANIMATION_EASING = EaseOutExpo
 private const val ENTER_ANIMATION_DELAY_MS = 100
@@ -208,6 +210,7 @@ fun GalleryNavHost(
               )
             },
             onModelsClicked = { navController.navigate(ROUTE_MODEL_MANAGER) },
+            onModelConverterClicked = { navController.navigate(ROUTE_MODEL_CONVERTER) },
             gm4 = true,
           )
         }
@@ -436,6 +439,20 @@ fun GalleryNavHost(
           },
         )
       }
+    }
+
+    // Model converter page.
+    composable(
+      route = ROUTE_MODEL_CONVERTER,
+      enterTransition = { slideUpEnter() },
+      exitTransition = { slideDownExit() },
+    ) {
+      ModelConverterScreen(
+        navigateUp = {
+          enableHomeScreenAnimation = false
+          navController.navigateUp()
+        },
+      )
     }
   }
 

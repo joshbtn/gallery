@@ -93,7 +93,32 @@
   <string name="drawer_settings_description" translatable="false">Manage application settings</string>
   <string name="drawer_models_label" translatable="false">Models</string>
   <string name="drawer_models_description" translatable="false">Browse, try, and benchmark models</string>
-  <string name="edit" translatable="false">Edit</string>
+  <string name="drawer_converter_label" translatable="false">Convert Model</string>
+  <string name="drawer_converter_description" translatable="false">Convert HuggingFace or local models</string>
+  <string name="category_tools" translatable="false">Tools</string>
+  <string name="converter_screen_title" translatable="false">Model Converter</string>
+  <string name="converter_tab_huggingface" translatable="false">HuggingFace</string>
+  <string name="converter_tab_local" translatable="false">Local File</string>
+  <string name="converter_hf_repo_label" translatable="false">HuggingFace Repo ID</string>
+  <string name="converter_hf_repo_placeholder" translatable="false">e.g. Qwen/Qwen2.5-0.5B-Instruct</string>
+  <string name="converter_quantization_label" translatable="false">Quantization</string>
+  <string name="converter_search_button" translatable="false">Search LiteRT Community</string>
+  <string name="converter_found_title" translatable="false">Pre-converted model found!</string>
+  <string name="converter_not_found_title" translatable="false">No pre-converted model found</string>
+  <string name="converter_download_button" translatable="false">Download Converted Model</string>
+  <string name="converter_searching" translatable="false">Searching…</string>
+  <string name="converter_downloading" translatable="false">Downloading…</string>
+  <string name="converter_instructions_title" translatable="false">Convert on your PC</string>
+  <string name="converter_instructions_content" translatable="false">To convert this model, run the following command on your PC using the ai-edge-torch CLI, then import the resulting .task file into the app.</string>
+  <string name="converter_copy_command" translatable="false">Copy Command</string>
+  <string name="converter_command_copied" translatable="false">Command copied to clipboard</string>
+  <string name="converter_open_docs" translatable="false">Open LiteRT Docs</string>
+  <string name="converter_local_pick_file" translatable="false">Select Source File</string>
+  <string name="converter_local_no_file" translatable="false">No file selected</string>
+  <string name="converter_local_instructions" translatable="false">Select a .safetensors, .bin, or .onnx file from your device. The app will show the conversion command to run on your PC. Once converted, import the .task file using the Models screen.</string>
+  <string name="converter_import_after_conversion" translatable="false">After converting, go to Models → + to import the .task file.</string>
+  <string name="model_available_in_tasks" translatable="false">Available in tasks</string>
+  <string name="model_available_in_tasks_hint" translatable="false">Toggle which tasks can use this model</string>
   <string name="edit_secret" translatable="false">Edit secret</string>
   <string name="enter_instruction" translatable="false">Enter instruction</string>
   <string name="expand_all" translatable="false">Expand all</string>
