@@ -93,7 +93,7 @@
   <string name="drawer_settings_description" translatable="false">Manage application settings</string>
   <string name="drawer_models_label" translatable="false">Models</string>
   <string name="drawer_models_description" translatable="false">Browse, try, and benchmark models</string>
-  <string name="drawer_converter_label" translatable="false">Convert Model</string>
+  <string name="drawer_converter_label" translatable="false">Model Converter</string>
   <string name="drawer_converter_description" translatable="false">Convert HuggingFace or local models</string>
   <string name="category_tools" translatable="false">Tools</string>
   <string name="converter_screen_title" translatable="false">Model Converter</string>

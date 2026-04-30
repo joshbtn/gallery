@@ -202,7 +202,7 @@ private fun HuggingFaceTab(
     // ── Intro ─────────────────────────────────────────────────────────────
     Text(
       "Enter a HuggingFace model ID to search for a pre-converted LiteRT version in the " +
-        "litert-community organisation. If no pre-converted model exists, the screen shows " +
+        "litert-community organization. If no pre-converted model exists, the screen shows " +
         "the command to convert it yourself using the ai-edge-torch CLI.",
       style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant,

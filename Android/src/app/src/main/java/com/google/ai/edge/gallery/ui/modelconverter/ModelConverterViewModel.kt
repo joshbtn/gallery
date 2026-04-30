@@ -19,7 +19,8 @@ package com.google.ai.edge.gallery.ui.modelconverter
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.annotations.SerializedName
+import com.google.gson.Gson
+import com.google.gson.JsonObject
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -120,11 +121,9 @@ class ModelConverterViewModel : ViewModel() {
         val responseCode = connection.responseCode
         if (responseCode == HttpURLConnection.HTTP_OK) {
           val body = connection.inputStream.bufferedReader().readText()
-          // Find a file whose name contains the quantization token (e.g. "int4" or "q4").
+          // Parse the HuggingFace API response to find a matching .task or .litertlm file.
           val quantToken = quant.flag
-          val fileRegex = Regex(""""rfilename":\s*"([^"]*$quantToken[^"]*\.(?:task|litertlm))"""",
-            RegexOption.IGNORE_CASE)
-          val matchedFile = fileRegex.find(body)?.groupValues?.getOrNull(1)
+          val matchedFile = findMatchingFile(body, quantToken)
           if (matchedFile != null) {
             val downloadUrl =
               "https://huggingface.co/$communityRepoId/resolve/main/$matchedFile?download=true"
@@ -169,5 +168,27 @@ class ModelConverterViewModel : ViewModel() {
       "--model_name=${repoId} " +
       "--quantization=$quant " +
       "--output_path=./output/"
+  }
+
+  /**
+   * Parses the HuggingFace model API JSON response and returns the name of the first file that
+   * matches the given quantization token and has a `.task` or `.litertlm` extension, or null if
+   * no such file exists.
+   */
+  private fun findMatchingFile(responseBody: String, quantToken: String): String? {
+    return try {
+      val json = Gson().fromJson(responseBody, JsonObject::class.java)
+      val siblings = json.getAsJsonArray("siblings") ?: return null
+      siblings
+        .mapNotNull { it.asJsonObject?.get("rfilename")?.asString }
+        .firstOrNull { fileName ->
+          val lower = fileName.lowercase()
+          lower.contains(quantToken.lowercase()) &&
+            (lower.endsWith(".task") || lower.endsWith(".litertlm"))
+        }
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to parse HF API response", e)
+      null
+    }
   }
 }
