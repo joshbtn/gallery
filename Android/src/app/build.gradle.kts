@@ -36,8 +36,8 @@ android {
     applicationId = "com.google.aiedge.gallery"
     minSdk = 31
     targetSdk = 35
-    versionCode = 29
-    versionName = "1.0.12"
+    versionCode = 31
+    versionName = "1.0.14"
 
     // Needed for HuggingFace auth workflows.
     // Use the scheme of the "Redirect URLs" in HuggingFace app.
@@ -121,6 +121,9 @@ dependencies {
   debugImplementation(libs.androidx.ui.test.manifest)
   ksp(libs.moshi.kotlin.codegen)
   implementation(libs.mlkit.genai.prompt)
+  implementation(libs.mcp.kotlin.sdk)
+  implementation(libs.ktor.client.android)
+  implementation(libs.ktor.client.core)
 }
 
 protobuf {
