@@ -20,8 +20,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import com.google.mediapipe.framework.image.BitmapExtractor
-import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator
-import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator.ImageGeneratorOptions
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -30,19 +28,19 @@ import kotlinx.coroutines.withContext
 private const val TAG = "AGImageGeneratorHelper"
 
 /**
- * Helper object that wraps MediaPipe's [ImageGenerator] task.
+ * Helper object that wraps MediaPipe's ImageGenerator task.
  *
- * It manages a single [ImageGenerator] instance, created from a stable-diffusion `.task` model
+ * It manages a single ImageGenerator instance, created from a stable-diffusion `.task` model
  * directory placed on the device's external storage.
  */
 object ImageGeneratorHelper {
 
-  /** The active [ImageGenerator] instance, or `null` when not initialized. */
-  var instance: ImageGenerator? = null
+  /** The active ImageGenerator instance, or `null` when not initialized. */
+  var instance: Any? = null
     private set
 
   /**
-   * Initializes the [ImageGenerator] from the given model directory path.
+   * Initializes the ImageGenerator from the given model directory path.
    *
    * This runs on [Dispatchers.IO] so callers are free to invoke it from any coroutine context.
    *
@@ -55,9 +53,17 @@ object ImageGeneratorHelper {
     withContext(Dispatchers.IO) {
       try {
         close()
-        val options =
-          ImageGeneratorOptions.builder().setImageGeneratorModelDirectory(modelPath).build()
-        instance = ImageGenerator.createFromOptions(context, options)
+        val imageGeneratorClass = loadImageGeneratorClass()
+        val options = buildImageGeneratorOptions(imageGeneratorClass, modelPath)
+        val createFromOptionsMethod =
+          imageGeneratorClass.methods.firstOrNull {
+            it.name == "createFromOptions" &&
+              it.parameterCount == 2 &&
+              it.parameterTypes[0] == Context::class.java &&
+              it.parameterTypes[1].isInstance(options)
+          }
+            ?: throw IllegalStateException("ImageGenerator.createFromOptions(Context, Options) method not found")
+        instance = createFromOptionsMethod.invoke(null, context, options)
         Log.d(TAG, "ImageGenerator initialized from: $modelPath")
         onDone("")
       } catch (e: Exception) {
@@ -114,7 +120,7 @@ object ImageGeneratorHelper {
   }
 
   private suspend fun runGeneration(
-    generator: ImageGenerator,
+    generator: Any,
     prompt: String,
     iterations: Int,
     seed: Int,
@@ -175,6 +181,53 @@ object ImageGeneratorHelper {
         it.name == "generatedImage" && it.parameterCount == 0
       } ?: return null
     val mpImage = generatedImageMethod.invoke(result) ?: return null
-    return BitmapExtractor.extract(mpImage)
+    val extractMethod =
+      BitmapExtractor::class.java.methods.firstOrNull {
+        it.name == "extract" &&
+          it.parameterCount == 1 &&
+          it.parameterTypes[0].isInstance(mpImage)
+      } ?: return null
+    return extractMethod.invoke(null, mpImage) as? Bitmap
+  }
+
+  private fun loadImageGeneratorClass(): Class<*> {
+    val classNames =
+      listOf(
+        "com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator",
+        "com.google.mediapipe.tasks.genai.imagegenerator.ImageGenerator",
+      )
+    classNames.forEach { className ->
+      try {
+        return Class.forName(className)
+      } catch (_: ClassNotFoundException) {}
+    }
+    throw IllegalStateException("ImageGenerator class not found in MediaPipe runtime")
+  }
+
+  private fun buildImageGeneratorOptions(imageGeneratorClass: Class<*>, modelPath: String): Any {
+    val optionsClass =
+      imageGeneratorClass.declaredClasses.firstOrNull { it.simpleName == "ImageGeneratorOptions" }
+        ?: throw IllegalStateException("ImageGeneratorOptions class not found")
+    val builderMethod =
+      optionsClass.methods.firstOrNull {
+        it.name == "builder" && it.parameterCount == 0
+      }
+        ?: throw IllegalStateException("ImageGeneratorOptions.builder() method not found")
+    val builder = builderMethod.invoke(null)
+    val setModelDirMethod =
+      builder.javaClass.methods.firstOrNull {
+        it.name == "setImageGeneratorModelDirectory" &&
+          it.parameterCount == 1 &&
+          it.parameterTypes[0] == String::class.java
+      }
+        ?: throw IllegalStateException("setImageGeneratorModelDirectory(String) method not found")
+    setModelDirMethod.invoke(builder, modelPath)
+    val buildMethod =
+      builder.javaClass.methods.firstOrNull {
+        it.name == "build" && it.parameterCount == 0
+      }
+        ?: throw IllegalStateException("ImageGeneratorOptions.Builder.build() method not found")
+    return buildMethod.invoke(builder)
+      ?: throw IllegalStateException("ImageGeneratorOptions.Builder.build() returned null")
   }
 }
