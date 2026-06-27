@@ -75,13 +75,14 @@ object ImageGeneratorHelper {
    */
   suspend fun generate(prompt: String, iterations: Int = 20, seed: Long): Bitmap =
     withContext(Dispatchers.Default) {
-      require(iterations > 0) { "Iterations must be greater than 0" }
+      require(iterations >= 1) { "Iterations must be greater than or equal to 1" }
       val generator =
         instance ?: throw IllegalStateException("ImageGenerator is not initialized")
       // MediaPipe execute() takes an Int seed; clamp to avoid overflow for large Long values.
       val seedInt = seed.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
-      val result = runGeneration(generator = generator, prompt = prompt, iterations = iterations, seed = seedInt)
-      extractBitmap(result) ?: throw IllegalStateException("No image was returned by the generator")
+      val generationResult =
+        runGeneration(generator = generator, prompt = prompt, iterations = iterations, seed = seedInt)
+      extractBitmap(generationResult) ?: throw IllegalStateException("No image was returned by the generator")
     }
 
   /** Releases the underlying [ImageGenerator] resources. */
@@ -164,7 +165,7 @@ object ImageGeneratorHelper {
     }
 
     throw IllegalStateException(
-      "Unsupported ImageGenerator API: expected execute(String,int,int), setInputs+execute(boolean), or execute(), but none were found in tasks-vision runtime",
+      "Unsupported ImageGenerator API in tasks-vision runtime. Expected execute(String,int,int), setInputs+execute(boolean), or execute(). Verify MediaPipe tasks-vision library version compatibility.",
     )
   }
 
