@@ -22,6 +22,7 @@ import android.util.Log
 import com.google.mediapipe.framework.image.BitmapExtractor
 import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator
 import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator.ImageGeneratorOptions
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -104,7 +105,7 @@ object ImageGeneratorHelper {
     }
   }
 
-  private fun runGeneration(
+  private suspend fun runGeneration(
     generator: ImageGenerator,
     prompt: String,
     iterations: Int,
@@ -141,7 +142,10 @@ object ImageGeneratorHelper {
     if (setInputs != null && executeStepped != null) {
       setInputs.invoke(generator, prompt, iterations, seed)
       var lastResult: Any? = null
-      repeat(iterations.coerceAtLeast(1)) { lastResult = executeStepped.invoke(generator, true) }
+      repeat(iterations.coerceAtLeast(1)) {
+        currentCoroutineContext().ensureActive()
+        lastResult = executeStepped.invoke(generator, true)
+      }
       return lastResult
     }
 
