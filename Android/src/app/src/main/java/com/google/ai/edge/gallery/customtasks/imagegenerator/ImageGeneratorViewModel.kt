@@ -86,7 +86,7 @@ class ImageGeneratorViewModel @Inject constructor() : ViewModel() {
         _uiState.update { it.copy(isGenerating = false, generatedBitmap = bitmap) }
       } catch (e: Exception) {
         _uiState.update {
-          it.copy(isGenerating = false, errorMessage = e.message ?: "Generation failed")
+          it.copy(isGenerating = false, errorMessage = e.message ?: "Image generation failed")
         }
       }
     }

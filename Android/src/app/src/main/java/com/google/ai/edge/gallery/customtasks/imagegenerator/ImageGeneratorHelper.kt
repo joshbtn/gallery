@@ -69,6 +69,7 @@ object ImageGeneratorHelper {
   /** Generates an image for the given [prompt]. */
   suspend fun generate(prompt: String, iterations: Int = 20, seed: Long): Bitmap =
     withContext(Dispatchers.Default) {
+      require(iterations > 0) { "Iterations must be greater than 0" }
       val generator =
         instance ?: throw IllegalStateException("ImageGenerator is not initialized")
       // MediaPipe execute() takes an Int seed; clamp to avoid overflow for large Long values.
@@ -142,7 +143,8 @@ object ImageGeneratorHelper {
     if (setInputs != null && executeStepped != null) {
       setInputs.invoke(generator, prompt, iterations, seed)
       var lastResult: Any? = null
-      repeat(iterations.coerceAtLeast(1)) {
+      currentCoroutineContext().ensureActive()
+      repeat(iterations) {
         currentCoroutineContext().ensureActive()
         lastResult = executeStepped.invoke(generator, true)
       }
