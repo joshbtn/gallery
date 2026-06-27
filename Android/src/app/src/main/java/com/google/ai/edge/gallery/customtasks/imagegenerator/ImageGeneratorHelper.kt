@@ -24,6 +24,7 @@ import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator
 import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator.ImageGeneratorOptions
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 private const val TAG = "AGImageGeneratorHelper"
@@ -143,9 +144,9 @@ object ImageGeneratorHelper {
     if (setInputs != null && executeStepped != null) {
       setInputs.invoke(generator, prompt, iterations, seed)
       var lastResult: Any? = null
-      currentCoroutineContext().ensureActive()
+      val coroutineContext = currentCoroutineContext()
       repeat(iterations) {
-        currentCoroutineContext().ensureActive()
+        coroutineContext.ensureActive()
         lastResult = executeStepped.invoke(generator, true)
       }
       return lastResult
@@ -156,7 +157,9 @@ object ImageGeneratorHelper {
       return executeNoArg.invoke(generator)
     }
 
-    throw IllegalStateException("Unsupported ImageGenerator API in tasks-vision runtime")
+    throw IllegalStateException(
+      "Unsupported ImageGenerator API: expected execute(String,int,int), setInputs+execute(boolean), or execute(), but none were found in tasks-vision runtime",
+    )
   }
 
   private fun extractBitmap(result: Any?): Bitmap? {
