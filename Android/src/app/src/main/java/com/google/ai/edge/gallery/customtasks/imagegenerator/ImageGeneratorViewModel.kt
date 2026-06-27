@@ -42,6 +42,11 @@ data class ImageGeneratorUiState(
 @HiltViewModel
 class ImageGeneratorViewModel @Inject constructor() : ViewModel() {
 
+  private companion object {
+    const val MIN_ITERATIONS = 1
+    const val MAX_ITERATIONS = 50
+  }
+
   private val _uiState = MutableStateFlow(ImageGeneratorUiState())
   val uiState: StateFlow<ImageGeneratorUiState> = _uiState.asStateFlow()
 
@@ -50,7 +55,7 @@ class ImageGeneratorViewModel @Inject constructor() : ViewModel() {
   }
 
   fun updateIterations(iterations: Int) {
-    _uiState.update { it.copy(iterations = iterations) }
+    _uiState.update { it.copy(iterations = iterations.coerceIn(MIN_ITERATIONS, MAX_ITERATIONS)) }
   }
 
   fun updateSeed(seed: Long) {

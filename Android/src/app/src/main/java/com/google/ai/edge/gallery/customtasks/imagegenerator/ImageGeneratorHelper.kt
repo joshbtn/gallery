@@ -67,7 +67,12 @@ object ImageGeneratorHelper {
     }
   }
 
-  /** Generates an image for the given [prompt]. */
+  /**
+   * Generates an image for the given [prompt].
+   *
+   * Seed values are clamped to Int range because MediaPipe image generation APIs expect Int seed
+   * inputs.
+   */
   suspend fun generate(prompt: String, iterations: Int = 20, seed: Long): Bitmap =
     withContext(Dispatchers.Default) {
       require(iterations > 0) { "Iterations must be greater than 0" }
@@ -145,6 +150,7 @@ object ImageGeneratorHelper {
       setInputs.invoke(generator, prompt, iterations, seed)
       var lastResult: Any? = null
       val coroutineContext = currentCoroutineContext()
+      // Stepped execution supports coroutine cancellation between diffusion iterations.
       repeat(iterations) {
         coroutineContext.ensureActive()
         lastResult = executeStepped.invoke(generator, true)
