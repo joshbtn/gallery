@@ -91,7 +91,7 @@ object ImageGeneratorHelper {
       extractBitmap(generationResult) ?: throw IllegalStateException("No image was returned by the generator")
     }
 
-  /** Releases the underlying [ImageGenerator] resources. */
+  /** Releases the underlying ImageGenerator resources. */
   fun close() {
     try {
       instance?.let { generator ->
