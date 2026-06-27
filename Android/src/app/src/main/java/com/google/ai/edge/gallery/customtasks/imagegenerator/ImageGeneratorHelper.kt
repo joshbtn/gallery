@@ -81,7 +81,9 @@ object ImageGeneratorHelper {
     withContext(Dispatchers.Default) {
       val generator =
         instance ?: throw IllegalStateException("ImageGenerator is not initialized")
-      val result = generator.execute(prompt, iterations, seed.toInt())
+      // MediaPipe execute() takes an Int seed; clamp to avoid overflow for large Long values.
+      val seedInt = seed.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
+      val result = generator.execute(prompt, iterations, seedInt)
       val mpImage =
         result.generatedImage()
           ?: throw IllegalStateException("No image was returned by the generator")

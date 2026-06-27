@@ -47,7 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -64,14 +63,10 @@ fun ImageGeneratorScreen(
   modelManagerViewModel: ModelManagerViewModel,
   viewModel: ImageGeneratorViewModel = hiltViewModel(),
 ) {
-  val context = LocalContext.current
   val uiState by viewModel.uiState.collectAsState()
   val modelManagerUiState by modelManagerViewModel.uiState.collectAsState()
   val selectedModel = modelManagerUiState.selectedModel
   val isModelReady = modelManagerUiState.isModelInitialized(model = selectedModel)
-
-  // Derive the model directory path from the model instance (set during initializeModelFn).
-  val modelPath = selectedModel.instance as? String ?: ""
 
   Column(
     modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -136,7 +131,7 @@ fun ImageGeneratorScreen(
 
     // ── Generate button ──────────────────────────────────────────────────────
     Button(
-      onClick = { viewModel.generate(context = context, modelPath = modelPath) },
+      onClick = { viewModel.generate() },
       enabled = isModelReady && !uiState.isGenerating && uiState.prompt.isNotBlank(),
       modifier = Modifier.fillMaxWidth(),
     ) {
@@ -170,7 +165,11 @@ fun ImageGeneratorScreen(
         Image(
           bitmap = bitmap.asImageBitmap(),
           contentDescription = "Generated image",
-          modifier = Modifier.fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height),
+          modifier =
+            Modifier.fillMaxWidth().let { mod ->
+              if (bitmap.height > 0) mod.aspectRatio(bitmap.width.toFloat() / bitmap.height)
+              else mod
+            },
         )
       }
     }

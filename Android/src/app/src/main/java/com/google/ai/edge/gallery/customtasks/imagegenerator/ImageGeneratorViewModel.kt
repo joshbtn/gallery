@@ -16,7 +16,6 @@
 
 package com.google.ai.edge.gallery.customtasks.imagegenerator
 
-import android.content.Context
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -67,11 +66,8 @@ class ImageGeneratorViewModel @Inject constructor() : ViewModel() {
    *
    * The blocking [ImageGeneratorHelper.generate] call is dispatched to [kotlinx.coroutines.Dispatchers.Default]
    * internally, so this function is safe to call from the UI.
-   *
-   * @param context   Application context (used only if the model needs context at runtime).
-   * @param modelPath Path to the directory that was used to initialize [ImageGeneratorHelper].
    */
-  fun generate(context: Context, modelPath: String) {
+  fun generate() {
     val state = _uiState.value
     if (state.prompt.isBlank()) {
       _uiState.update { it.copy(errorMessage = "Please enter a prompt") }
