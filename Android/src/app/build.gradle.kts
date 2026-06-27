@@ -121,6 +121,7 @@ dependencies {
   debugImplementation(libs.androidx.ui.test.manifest)
   ksp(libs.moshi.kotlin.codegen)
   implementation(libs.mlkit.genai.prompt)
+  implementation(libs.mediapipe.tasks.vision)
   implementation(libs.mcp.kotlin.sdk)
   implementation(libs.ktor.client.android)
   implementation(libs.ktor.client.core)
