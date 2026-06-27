@@ -19,6 +19,7 @@ package com.google.ai.edge.gallery.customtasks.imagegenerator
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.google.mediapipe.framework.image.BitmapExtractor
 import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator
 import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator.ImageGeneratorOptions
 import kotlinx.coroutines.Dispatchers
@@ -64,41 +65,100 @@ object ImageGeneratorHelper {
     }
   }
 
-  /**
-   * Generates an image for the given [prompt].
-   *
-   * Runs the blocking [ImageGenerator.execute] call on [Dispatchers.Default] to keep the Android
-   * main thread free.
-   *
-   * @param prompt     Text description of the image to generate.
-   * @param iterations Number of diffusion steps (higher = better quality, slower). Default 20.
-   * @param seed       Random seed for reproducible results.
-   * @return The generated [Bitmap].
-   * @throws IllegalStateException if the generator has not been initialized.
-   * @throws Exception if generation fails.
-   */
+  /** Generates an image for the given [prompt]. */
   suspend fun generate(prompt: String, iterations: Int = 20, seed: Long): Bitmap =
     withContext(Dispatchers.Default) {
       val generator =
         instance ?: throw IllegalStateException("ImageGenerator is not initialized")
       // MediaPipe execute() takes an Int seed; clamp to avoid overflow for large Long values.
       val seedInt = seed.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
-      val result = generator.execute(prompt, iterations, seedInt)
-      val mpImage =
-        result.generatedImage()
-          ?: throw IllegalStateException("No image was returned by the generator")
-      // Extract Bitmap from MPImage via its BitmapExtractor.
-      com.google.mediapipe.framework.image.BitmapExtractor.extract(mpImage)
+      val result = runGeneration(generator = generator, prompt = prompt, iterations = iterations, seed = seedInt)
+      extractBitmap(result) ?: throw IllegalStateException("No image was returned by the generator")
     }
 
   /** Releases the underlying [ImageGenerator] resources. */
   fun close() {
     try {
-      instance?.close()
+      instance?.let { generator ->
+        val closeMethod =
+          generator.javaClass.methods.firstOrNull { it.name == "close" && it.parameterCount == 0 }
+            ?: generator.javaClass.methods.firstOrNull {
+              it.name == "release" && it.parameterCount == 0
+            }
+            ?: generator.javaClass.methods.firstOrNull {
+              it.name == "shutdown" && it.parameterCount == 0
+            }
+            ?: generator.javaClass.methods.firstOrNull {
+              it.name == "delete" && it.parameterCount == 0
+            }
+        if (closeMethod != null) {
+          closeMethod.invoke(generator)
+        } else {
+          Log.w(TAG, "No known close method found on ImageGenerator")
+        }
+      }
     } catch (e: Exception) {
       Log.w(TAG, "Error closing ImageGenerator", e)
     } finally {
       instance = null
     }
+  }
+
+  private fun runGeneration(
+    generator: ImageGenerator,
+    prompt: String,
+    iterations: Int,
+    seed: Int,
+  ): Any? {
+    val methods = generator.javaClass.methods
+
+    val executeWithPrompt =
+      methods.firstOrNull {
+        it.name == "execute" &&
+          it.parameterCount == 3 &&
+          it.parameterTypes[0] == String::class.java &&
+          it.parameterTypes[1] == Int::class.javaPrimitiveType &&
+          it.parameterTypes[2] == Int::class.javaPrimitiveType
+      }
+    if (executeWithPrompt != null) {
+      return executeWithPrompt.invoke(generator, prompt, iterations, seed)
+    }
+
+    val setInputs =
+      methods.firstOrNull {
+        it.name == "setInputs" &&
+          it.parameterCount == 3 &&
+          it.parameterTypes[0] == String::class.java &&
+          it.parameterTypes[1] == Int::class.javaPrimitiveType &&
+          it.parameterTypes[2] == Int::class.javaPrimitiveType
+      }
+    val executeStepped =
+      methods.firstOrNull {
+        it.name == "execute" &&
+          it.parameterCount == 1 &&
+          it.parameterTypes[0] == Boolean::class.javaPrimitiveType
+      }
+    if (setInputs != null && executeStepped != null) {
+      setInputs.invoke(generator, prompt, iterations, seed)
+      var lastResult: Any? = null
+      repeat(iterations.coerceAtLeast(1)) { lastResult = executeStepped.invoke(generator, true) }
+      return lastResult
+    }
+
+    val executeNoArg = methods.firstOrNull { it.name == "execute" && it.parameterCount == 0 }
+    if (executeNoArg != null) {
+      return executeNoArg.invoke(generator)
+    }
+
+    throw IllegalStateException("Unsupported ImageGenerator API in tasks-vision runtime")
+  }
+
+  private fun extractBitmap(result: Any?): Bitmap? {
+    val generatedImageMethod =
+      result?.javaClass?.methods?.firstOrNull {
+        it.name == "generatedImage" && it.parameterCount == 0
+      } ?: return null
+    val mpImage = generatedImageMethod.invoke(result) ?: return null
+    return BitmapExtractor.extract(mpImage)
   }
 }
