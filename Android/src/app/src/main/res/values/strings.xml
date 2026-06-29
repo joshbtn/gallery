@@ -206,6 +206,11 @@
   <string name="mobile_actions_title" translatable="true">Mobile Actions</string>
   <string name="mobile_actions_description" translatable="true">Control your device with simple commands</string>
   <string name="mobile_actions_supported_actions" translatable="true">Supported sample actions:</string>
+  <string name="mobile_actions_logcat_button" translatable="true">Logcat</string>
+  <string name="mobile_actions_logcat_title" translatable="true">Logcat</string>
+  <string name="mobile_actions_logcat_refresh" translatable="true">Refresh</string>
+  <string name="mobile_actions_logcat_empty" translatable="true">No logs found for this app process.</string>
+  <string name="mobile_actions_logcat_unavailable" translatable="true">Unable to load logcat logs on this device.</string>
   <string name="mobile_actions_tab_model_response" translatable="true">Model response</string>
   <string name="mobile_actions_tab_function_called" translatable="true">Function(s) called</string>
   <string name="update" translatable="true">Update</string>

@@ -300,6 +300,9 @@ fun MainUi(
   var doneGeneratingResponse by remember { mutableStateOf(false) }
   var showErrorDialog by remember { mutableStateOf(false) }
   var errorDialogContent by remember { mutableStateOf("") }
+  var showLogcatDialog by remember { mutableStateOf(false) }
+  var loadingLogcat by remember { mutableStateOf(false) }
+  var logcatOutput by remember { mutableStateOf("") }
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
   val snackbarHostState = remember { SnackbarHostState() }
@@ -344,6 +347,16 @@ fun MainUi(
   // Main UI.
   else {
     val noFunctionCallSnackbarMessage = stringResource(R.string.snackbar_no_function_call)
+    val loadLogcat: () -> Unit = {
+      loadingLogcat = true
+      scope.launch(Dispatchers.IO) {
+        val output = readLogcat(resources = resources)
+        scope.launch(Dispatchers.Main) {
+          logcatOutput = output
+          loadingLogcat = false
+        }
+      }
+    }
 
     val send: (String) -> Unit = { text ->
       scope.launch(Dispatchers.Main) {
@@ -501,10 +514,14 @@ fun MainUi(
           // Response.
           else {
             // Tab bar.
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
               PrimaryTabRow(
                 selectedTabIndex = selectedTabIndex,
                 containerColor = Color.Transparent,
+                modifier = Modifier.weight(1f),
                 indicator = {
                   TabRowDefaults.PrimaryIndicator(
                     modifier =
@@ -554,6 +571,15 @@ fun MainUi(
                     },
                   )
                 }
+              }
+              TextButton(
+                onClick = {
+                  showLogcatDialog = true
+                  loadLogcat()
+                },
+                enabled = !loadingLogcat,
+              ) {
+                Text(stringResource(R.string.mobile_actions_logcat_button))
               }
             }
 
@@ -697,6 +723,43 @@ fun MainUi(
     }
   }
 
+  if (showLogcatDialog) {
+    AlertDialog(
+      title = { Text(stringResource(R.string.mobile_actions_logcat_title)) },
+      text = {
+        if (loadingLogcat) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+          ) {
+            CircularProgressIndicator(
+              trackColor = MaterialTheme.colorScheme.surfaceVariant,
+              strokeWidth = 3.dp,
+              modifier = Modifier.size(24.dp),
+            )
+          }
+        } else {
+          Text(
+            text = logcatOutput,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+          )
+        }
+      },
+      onDismissRequest = { showLogcatDialog = false },
+      dismissButton = {
+        TextButton(onClick = { showLogcatDialog = false }) {
+          Text(stringResource(R.string.close))
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = loadLogcat, enabled = !loadingLogcat) {
+          Text(stringResource(R.string.mobile_actions_logcat_refresh))
+        }
+      },
+    )
+  }
+
   if (showErrorDialog) {
     AlertDialog(
       title = { Text(stringResource(R.string.error)) },
@@ -738,6 +801,20 @@ fun MainUi(
         }
       },
     )
+  }
+}
+
+private fun readLogcat(resources: Resources): String {
+  return try {
+    val process =
+      Runtime.getRuntime().exec(
+        arrayOf("logcat", "-d", "-t", "400", "--pid=${android.os.Process.myPid()}")
+      )
+    val output = process.inputStream.bufferedReader().use { it.readText().trim() }
+    process.waitFor()
+    if (output.isNotEmpty()) output else resources.getString(R.string.mobile_actions_logcat_empty)
+  } catch (_: Exception) {
+    resources.getString(R.string.mobile_actions_logcat_unavailable)
   }
 }
 
