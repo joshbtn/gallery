@@ -209,6 +209,7 @@
   <string name="mobile_actions_logcat_button" translatable="true">Logcat</string>
   <string name="mobile_actions_logcat_title" translatable="true">Logcat</string>
   <string name="mobile_actions_logcat_refresh" translatable="true">Refresh</string>
+  <string name="mobile_actions_logcat_warning" translatable="true">Log output may include sensitive debugging details.</string>
   <string name="mobile_actions_logcat_empty" translatable="true">No logs found for this app process.</string>
   <string name="mobile_actions_logcat_unavailable" translatable="true">Unable to load logcat logs on this device.</string>
   <string name="mobile_actions_tab_model_response" translatable="true">Model response</string>

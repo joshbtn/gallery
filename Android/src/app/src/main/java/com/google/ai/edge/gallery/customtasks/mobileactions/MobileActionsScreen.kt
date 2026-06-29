@@ -108,6 +108,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -133,6 +134,8 @@ import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import com.google.ai.edge.litertlm.ToolProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "AGMAScreen"
 
@@ -348,11 +351,12 @@ fun MainUi(
   else {
     val noFunctionCallSnackbarMessage = stringResource(R.string.snackbar_no_function_call)
     val loadLogcat: () -> Unit = {
-      loadingLogcat = true
-      scope.launch(Dispatchers.IO) {
-        val output = readLogcat(resources = resources)
-        scope.launch(Dispatchers.Main) {
+      scope.launch(Dispatchers.Main) {
+        loadingLogcat = true
+        try {
+          val output = withContext(Dispatchers.IO) { readLogcat(resources = resources) }
           logcatOutput = output
+        } finally {
           loadingLogcat = false
         }
       }
@@ -739,11 +743,20 @@ fun MainUi(
             )
           }
         } else {
-          Text(
-            text = logcatOutput,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-          )
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+              text = stringResource(R.string.mobile_actions_logcat_warning),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+              text = logcatOutput,
+              style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+              modifier =
+                Modifier.fillMaxWidth()
+                  .verticalScroll(rememberScrollState()),
+            )
+          }
         }
       },
       onDismissRequest = { showLogcatDialog = false },
@@ -808,12 +821,19 @@ private fun readLogcat(resources: Resources): String {
   return try {
     val process =
       Runtime.getRuntime().exec(
-        arrayOf("logcat", "-d", "-t", "400", "--pid=${android.os.Process.myPid()}")
+        arrayOf("logcat", "-d", "-t", "200", "--pid=${android.os.Process.myPid()}")
       )
-    val output = process.inputStream.bufferedReader().use { it.readText().trim() }
-    process.waitFor()
-    if (output.isNotEmpty()) output else resources.getString(R.string.mobile_actions_logcat_empty)
-  } catch (_: Exception) {
+    try {
+      if (!process.waitFor(3, TimeUnit.SECONDS)) {
+        return resources.getString(R.string.mobile_actions_logcat_unavailable)
+      }
+      val output = process.inputStream.bufferedReader().use { it.readText().trim() }
+      if (output.isNotEmpty()) output else resources.getString(R.string.mobile_actions_logcat_empty)
+    } finally {
+      process.destroy()
+    }
+  } catch (e: Exception) {
+    Log.w(TAG, "Unable to read logcat output.", e)
     resources.getString(R.string.mobile_actions_logcat_unavailable)
   }
 }
