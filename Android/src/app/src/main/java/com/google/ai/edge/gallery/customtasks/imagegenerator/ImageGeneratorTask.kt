@@ -72,16 +72,18 @@ class ImageGeneratorTask @Inject constructor() : CustomTask {
     systemInstruction: Contents?,
     onDone: (String) -> Unit,
   ) {
+    model.instance = null
+
     // Derive the model directory from the localFileRelativeDirPathOverride.
     val modelDir =
       File(context.getExternalFilesDir(null), model.localFileRelativeDirPathOverride.trimEnd('/'))
         .absolutePath
 
-    // Store the path so the screen / ViewModel can retrieve it from model.instance.
-    model.instance = modelDir
-
     coroutineScope.launch {
-      ImageGeneratorHelper.initialize(context = context, modelPath = modelDir, onDone = onDone)
+      ImageGeneratorHelper.initialize(context = context, modelPath = modelDir) { error ->
+        model.instance = if (error.isEmpty()) ImageGeneratorHelper.instance else null
+        onDone(error)
+      }
     }
   }
 

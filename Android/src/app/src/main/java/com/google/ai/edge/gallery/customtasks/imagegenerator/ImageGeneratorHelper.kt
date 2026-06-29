@@ -67,6 +67,7 @@ object ImageGeneratorHelper {
         Log.d(TAG, "ImageGenerator initialized from: $modelPath")
         onDone("")
       } catch (e: Exception) {
+        close()
         Log.e(TAG, "Failed to initialize ImageGenerator", e)
         onDone(e.message ?: "Failed to initialize image generator")
       }
