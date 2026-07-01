@@ -125,6 +125,7 @@ import com.google.ai.edge.gallery.ui.common.chat.MessageBodyLoading
 import com.google.ai.edge.gallery.ui.common.chat.MessageBodyWarning
 import com.google.ai.edge.gallery.ui.common.getTaskBgGradientColors
 import com.google.ai.edge.gallery.ui.common.getTaskIconColor
+import com.google.ai.edge.gallery.ui.common.readGalleryLogcat
 import com.google.ai.edge.gallery.ui.common.textandvoiceinput.HoldToDictateViewModel
 import com.google.ai.edge.gallery.ui.common.textandvoiceinput.TextAndVoiceInput
 import com.google.ai.edge.gallery.ui.common.textandvoiceinput.VoiceRecognizerOverlay
@@ -135,7 +136,6 @@ import com.google.ai.edge.litertlm.ToolProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
 
 private const val TAG = "AGMAScreen"
 
@@ -316,7 +316,7 @@ fun MainUi(
     scope.launch(Dispatchers.Main) {
       loadingLogcat = true
       try {
-        val output = withContext(Dispatchers.IO) { readLogcat(resources = resources) }
+        val output = withContext(Dispatchers.IO) { readGalleryLogcat(resources = resources, tag = TAG) }
         logcatOutput = output
       } finally {
         loadingLogcat = false
@@ -814,27 +814,6 @@ fun MainUi(
         }
       },
     )
-  }
-}
-
-private fun readLogcat(resources: Resources): String {
-  return try {
-    val process =
-      Runtime.getRuntime().exec(
-        arrayOf("logcat", "-d", "-t", "200", "--pid=${android.os.Process.myPid()}")
-      )
-    try {
-      if (!process.waitFor(3, TimeUnit.SECONDS)) {
-        return resources.getString(R.string.mobile_actions_logcat_unavailable)
-      }
-      val output = process.inputStream.bufferedReader().use { it.readText().trim() }
-      if (output.isNotEmpty()) output else resources.getString(R.string.mobile_actions_logcat_empty)
-    } finally {
-      process.destroy()
-    }
-  } catch (e: Exception) {
-    Log.w(TAG, "Unable to read logcat output.", e)
-    resources.getString(R.string.mobile_actions_logcat_unavailable)
   }
 }
 

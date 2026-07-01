@@ -100,6 +100,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -108,6 +109,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -125,14 +127,17 @@ import com.google.ai.edge.gallery.ui.common.RevealingText
 import com.google.ai.edge.gallery.ui.common.SwipingText
 import com.google.ai.edge.gallery.ui.common.TaskIcon
 import com.google.ai.edge.gallery.ui.common.buildTrackableUrlAnnotatedString
+import com.google.ai.edge.gallery.ui.common.readGalleryLogcat
 import com.google.ai.edge.gallery.ui.common.rememberDelayedAnimationProgress
 import com.google.ai.edge.gallery.ui.common.tos.AppTosDialog
 import com.google.ai.edge.gallery.ui.common.tos.TosViewModel
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import com.google.ai.edge.gallery.ui.theme.customColors
 import com.google.ai.edge.gallery.ui.theme.homePageTitleStyle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val TAG = "AGHomeScreen"
 private const val TASK_COUNT_ANIMATION_DURATION = 250
@@ -170,10 +175,25 @@ fun HomeScreen(
 ) {
   val uiState by modelManagerViewModel.uiState.collectAsState()
   var showSettingsDialog by remember { mutableStateOf(false) }
+  var showLogcatDialog by remember { mutableStateOf(false) }
   var showTosDialog by remember { mutableStateOf(!tosViewModel.getIsTosAccepted()) }
+  var loadingLogcat by remember { mutableStateOf(false) }
+  var logcatOutput by remember { mutableStateOf("") }
   val scope = rememberCoroutineScope()
   val context = LocalContext.current
+  val resources = LocalResources.current
   val isDevBuild = context.packageName.endsWith(".dev")
+  val loadLogcat: () -> Unit = {
+    scope.launch(Dispatchers.Main) {
+      loadingLogcat = true
+      try {
+        val output = withContext(Dispatchers.IO) { readGalleryLogcat(resources = resources, tag = TAG) }
+        logcatOutput = output
+      } finally {
+        loadingLogcat = false
+      }
+    }
+  }
 
   var tasks = uiState.tasks
 
@@ -329,6 +349,29 @@ fun HomeScreen(
               }
               Spacer(modifier = Modifier.height(16.dp))
               Row(modifier = Modifier.fillMaxWidth()) {
+                if (isDevBuild) {
+                  SquareDrawerItem(
+                    label = stringResource(R.string.mobile_actions_logcat_title),
+                    description = stringResource(R.string.view_console_logs),
+                    icon = Icons.Rounded.Flag,
+                    onClick = {
+                      showLogcatDialog = true
+                      loadLogcat()
+                      scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.weight(1f),
+                    iconBrush =
+                      linearGradient(
+                        colors =
+                          listOf(
+                            MaterialTheme.customColors.taskBgGradientColors[0][0],
+                            MaterialTheme.customColors.taskBgGradientColors[0][1],
+                          )
+                      ),
+                  )
+                  Spacer(modifier = Modifier.width(16.dp))
+                  Spacer(modifier = Modifier.weight(1f))
+                }
               }
             }
           }
@@ -502,6 +545,45 @@ fun HomeScreen(
         }
       }
     }
+  }
+
+  if (showLogcatDialog) {
+    AlertDialog(
+      title = { Text(stringResource(R.string.mobile_actions_logcat_title)) },
+      text = {
+        if (loadingLogcat) {
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            CircularProgressIndicator(
+              trackColor = MaterialTheme.colorScheme.surfaceVariant,
+              strokeWidth = 3.dp,
+              modifier = Modifier.size(24.dp),
+            )
+          }
+        } else {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+              text = stringResource(R.string.mobile_actions_logcat_warning),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+              text = logcatOutput,
+              style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+              modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            )
+          }
+        }
+      },
+      onDismissRequest = { showLogcatDialog = false },
+      dismissButton = {
+        TextButton(onClick = { showLogcatDialog = false }) { Text(stringResource(R.string.close)) }
+      },
+      confirmButton = {
+        TextButton(onClick = loadLogcat, enabled = !loadingLogcat) {
+          Text(stringResource(R.string.mobile_actions_logcat_refresh))
+        }
+      },
+    )
   }
 
   // Show TOS dialog for users to accept.
