@@ -312,6 +312,17 @@ fun MainUi(
   val focusManager = LocalFocusManager.current
   val resources = LocalResources.current
   val taskColor = getTaskBgGradientColors(task = task)[1]
+  val loadLogcat: () -> Unit = {
+    scope.launch(Dispatchers.Main) {
+      loadingLogcat = true
+      try {
+        val output = withContext(Dispatchers.IO) { readLogcat(resources = resources) }
+        logcatOutput = output
+      } finally {
+        loadingLogcat = false
+      }
+    }
+  }
 
   val curDownloadStatus = modelManagerUiState.modelDownloadStatus[model.name]?.status
   setAppBarControlsDisabled(
@@ -350,17 +361,6 @@ fun MainUi(
   // Main UI.
   else {
     val noFunctionCallSnackbarMessage = stringResource(R.string.snackbar_no_function_call)
-    val loadLogcat: () -> Unit = {
-      scope.launch(Dispatchers.Main) {
-        loadingLogcat = true
-        try {
-          val output = withContext(Dispatchers.IO) { readLogcat(resources = resources) }
-          logcatOutput = output
-        } finally {
-          loadingLogcat = false
-        }
-      }
-    }
 
     val send: (String) -> Unit = { text ->
       scope.launch(Dispatchers.Main) {
