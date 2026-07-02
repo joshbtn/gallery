@@ -16,6 +16,9 @@
 package com.google.ai.edge.gallery.customtasks.mobileactions
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.os.Bundle
@@ -51,6 +54,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
@@ -108,6 +112,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -124,6 +129,7 @@ import com.google.ai.edge.gallery.ui.common.chat.MessageBodyLoading
 import com.google.ai.edge.gallery.ui.common.chat.MessageBodyWarning
 import com.google.ai.edge.gallery.ui.common.getTaskBgGradientColors
 import com.google.ai.edge.gallery.ui.common.getTaskIconColor
+import com.google.ai.edge.gallery.ui.common.readGalleryLogcat
 import com.google.ai.edge.gallery.ui.common.textandvoiceinput.HoldToDictateViewModel
 import com.google.ai.edge.gallery.ui.common.textandvoiceinput.TextAndVoiceInput
 import com.google.ai.edge.gallery.ui.common.textandvoiceinput.VoiceRecognizerOverlay
@@ -133,6 +139,7 @@ import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import com.google.ai.edge.litertlm.ToolProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val TAG = "AGMAScreen"
 
@@ -300,12 +307,28 @@ fun MainUi(
   var doneGeneratingResponse by remember { mutableStateOf(false) }
   var showErrorDialog by remember { mutableStateOf(false) }
   var errorDialogContent by remember { mutableStateOf("") }
+  var showLogcatDialog by remember { mutableStateOf(false) }
+  var loadingLogcat by remember { mutableStateOf(false) }
+  var logcatOutput by remember { mutableStateOf("") }
   val context = LocalContext.current
+  val clipboard =
+    remember(context) { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
   val scope = rememberCoroutineScope()
   val snackbarHostState = remember { SnackbarHostState() }
   val focusManager = LocalFocusManager.current
   val resources = LocalResources.current
   val taskColor = getTaskBgGradientColors(task = task)[1]
+  val loadLogcat: () -> Unit = {
+    scope.launch(Dispatchers.Main) {
+      loadingLogcat = true
+      try {
+        val output = withContext(Dispatchers.IO) { readGalleryLogcat(resources = resources, tag = TAG) }
+        logcatOutput = output
+      } finally {
+        loadingLogcat = false
+      }
+    }
+  }
 
   val curDownloadStatus = modelManagerUiState.modelDownloadStatus[model.name]?.status
   setAppBarControlsDisabled(
@@ -501,10 +524,14 @@ fun MainUi(
           // Response.
           else {
             // Tab bar.
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
               PrimaryTabRow(
                 selectedTabIndex = selectedTabIndex,
                 containerColor = Color.Transparent,
+                modifier = Modifier.weight(1f),
                 indicator = {
                   TabRowDefaults.PrimaryIndicator(
                     modifier =
@@ -554,6 +581,15 @@ fun MainUi(
                     },
                   )
                 }
+              }
+              TextButton(
+                onClick = {
+                  showLogcatDialog = true
+                  loadLogcat()
+                },
+                enabled = !loadingLogcat,
+              ) {
+                Text(stringResource(R.string.mobile_actions_logcat_button))
               }
             }
 
@@ -695,6 +731,68 @@ fun MainUi(
         modifier = Modifier.padding(bottom = bottomPadding + 100.dp).align(Alignment.BottomCenter),
       )
     }
+  }
+
+  if (showLogcatDialog) {
+    AlertDialog(
+      title = { Text(stringResource(R.string.mobile_actions_logcat_title)) },
+      text = {
+        if (loadingLogcat) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+          ) {
+            CircularProgressIndicator(
+              trackColor = MaterialTheme.colorScheme.surfaceVariant,
+              strokeWidth = 3.dp,
+              modifier = Modifier.size(24.dp),
+            )
+          }
+        } else {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+              text = stringResource(R.string.mobile_actions_logcat_warning),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SelectionContainer {
+              Text(
+                text = logcatOutput,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+              )
+            }
+          }
+        }
+      },
+      onDismissRequest = { showLogcatDialog = false },
+      dismissButton = {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          TextButton(
+            onClick = {
+              clipboard.setPrimaryClip(ClipData.newPlainText("logcat", logcatOutput))
+              scope.launch {
+                snackbarHostState.showSnackbar(
+                  message = resources.getString(R.string.snackbar_copy_to_clipboard_success),
+                  duration = SnackbarDuration.Short,
+                )
+              }
+            },
+            enabled = !loadingLogcat && logcatOutput.isNotBlank(),
+          ) {
+            Text(stringResource(R.string.copy))
+          }
+          TextButton(onClick = { showLogcatDialog = false }) {
+            Text(stringResource(R.string.close))
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = loadLogcat, enabled = !loadingLogcat) {
+          Text(stringResource(R.string.mobile_actions_logcat_refresh))
+        }
+      },
+    )
   }
 
   if (showErrorDialog) {
