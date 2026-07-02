@@ -16,6 +16,9 @@
 package com.google.ai.edge.gallery.customtasks.mobileactions
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.os.Bundle
@@ -51,6 +54,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
@@ -307,6 +311,8 @@ fun MainUi(
   var loadingLogcat by remember { mutableStateOf(false) }
   var logcatOutput by remember { mutableStateOf("") }
   val context = LocalContext.current
+  val clipboard =
+    remember(context) { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
   val scope = rememberCoroutineScope()
   val snackbarHostState = remember { SnackbarHostState() }
   val focusManager = LocalFocusManager.current
@@ -749,20 +755,36 @@ fun MainUi(
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-              text = logcatOutput,
-              style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-              modifier =
-                Modifier.fillMaxWidth()
-                  .verticalScroll(rememberScrollState()),
-            )
+            SelectionContainer {
+              Text(
+                text = logcatOutput,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+              )
+            }
           }
         }
       },
       onDismissRequest = { showLogcatDialog = false },
       dismissButton = {
-        TextButton(onClick = { showLogcatDialog = false }) {
-          Text(stringResource(R.string.close))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          TextButton(
+            onClick = {
+              clipboard.setPrimaryClip(ClipData.newPlainText("logcat", logcatOutput))
+              scope.launch {
+                snackbarHostState.showSnackbar(
+                  message = resources.getString(R.string.snackbar_copy_to_clipboard_success),
+                  duration = SnackbarDuration.Short,
+                )
+              }
+            },
+            enabled = !loadingLogcat && logcatOutput.isNotBlank(),
+          ) {
+            Text(stringResource(R.string.copy))
+          }
+          TextButton(onClick = { showLogcatDialog = false }) {
+            Text(stringResource(R.string.close))
+          }
         }
       },
       confirmButton = {

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
@@ -216,25 +217,27 @@ private fun LogItem(log: LogMessage) {
     )
 
     // Source, LineNumber, and Message Column
-    Column(modifier = Modifier.weight(1f)) {
-      if (log.source.isNotEmpty() && log.lineNumber != -1) {
+    SelectionContainer {
+      Column(modifier = Modifier.weight(1f)) {
+        if (log.source.isNotEmpty() && log.lineNumber != -1) {
+          Text(
+            "${log.source}:${log.lineNumber}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+          )
+        } else if (log.source.isNotEmpty()) {
+          Text(
+            log.source,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+          )
+        }
         Text(
-          "${log.source}:${log.lineNumber}",
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        )
-      } else if (log.source.isNotEmpty()) {
-        Text(
-          log.source,
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+          log.message,
+          style = MaterialTheme.typography.bodyMedium,
+          modifier = Modifier.padding(top = 4.dp),
         )
       }
-      Text(
-        log.message,
-        style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(top = 4.dp),
-      )
     }
   }
 }
