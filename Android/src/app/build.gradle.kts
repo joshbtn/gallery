@@ -122,6 +122,7 @@ dependencies {
   ksp(libs.moshi.kotlin.codegen)
   implementation(libs.mlkit.genai.prompt)
   implementation(libs.mediapipe.tasks.vision)
+  implementation(libs.mediapipe.tasks.vision.image.generator)
   implementation(libs.mcp.kotlin.sdk)
   implementation(libs.ktor.client.android)
   implementation(libs.ktor.client.core)
